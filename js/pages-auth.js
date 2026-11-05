@@ -31,14 +31,24 @@
     after() {
       warmUp('pub');
       const adaCache = !!publik;
-      muatPublik().then(() => { if (App.parse().page !== 'login') return; if (!adaCache) App.render(); else Tema.sinkron(''); });
+      muatPublik().then(() => {
+        if (App.parse().page !== 'login' || Sesi.token) return;
+        if (adaCache) { Tema.sinkron(''); return; }
+        // render ulang tanpa menghapus isian yang sudah diketik pengguna
+        const u = document.getElementById('u'), pw = document.getElementById('p'), sedang = f.dataset.kirim === '1';
+        if (sedang) { Tema.sinkron(''); return; }
+        const nilai = { u: u ? u.value : '', p: pw ? pw.value : '', fokus: document.activeElement && document.activeElement.id };
+        App.render();
+        const u2 = document.getElementById('u'), p2 = document.getElementById('p');
+        if (u2) u2.value = nilai.u; if (p2) p2.value = nilai.p; if (nilai.fokus && document.getElementById(nilai.fokus)) document.getElementById(nilai.fokus).focus();
+      });
       const f = document.getElementById('f-login');
       f.onsubmit = async e => {
-        e.preventDefault();
+        e.preventDefault(); f.dataset.kirim = '1';
         const d = bacaForm(f), btn = f.querySelector('button[type=submit]');
         await busy(btn, async () => {
           const r = await api('auth.login', { username: d.username, password: d.password });
-          if (!r.success) { toast(r.message, 'bad'); return; }
+          if (!r.success) { f.dataset.kirim = ''; toast(r.message, 'bad'); return; }
           Sesi.set(r.data.token, r.data.me);
           if (!d.ingat) { LS.set('sigapkl_sementara', 1); sessionStorage.setItem('sigapkl_tab', '1'); } else LS.del('sigapkl_sementara');
           toast(r.message, 'ok');

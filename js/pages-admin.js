@@ -112,8 +112,8 @@
         '<div class="toolbar"><div class="seg">' + ['1', '2'].map(x => '<button class="' + (p === x ? 'on' : '') + '" data-act="go" data-href="#/penempatan/' + x + '">Periode ' + x + ' ' + pill(d.penempatan.filter(y => String(y.Periode) === x).length, 'mute') + '</button>').join('') + '</div>' +
         (belum.length ? '<span class="pill warn dot">' + belum.length + ' siswa belum ditempatkan di Periode ' + p + '</span>' : pill('Semua siswa sudah ditempatkan', 'ok', true)) + '</div>' +
         tblWrap(['Siswa', 'Skema', 'DUDI', 'Guru Pembimbing', 'Instruktur', 'Pekerjaan Spesifik', 'Rentang', 'Status', ''], rows.map(x => '<tr><td><div class="who">' + av(nmSiswa(x.NIS), (S.ix.siswa[x.NIS] || {}).FotoURL, 'av-xs') + '<div><div class="n">' + esc(nmSiswa(x.NIS)) + '</div><div class="s">' + esc(x.NIS) + '</div></div></div></td>' +
-          '<td>' + pill(x.Skema + ' periode', 'info') + '</td><td><b>' + esc(nmDudi(x.DUDIID)) + '</b></td><td class="small">' + esc(nmGuru(x.GuruID)) + '</td><td class="small">' + esc(nmIns(x.InstrukturID)) + '</td><td class="small">' + esc(x.PekerjaanSpesifik || '-') + '</td>' +
-          '<td class="small">' + esc(fmtTgl(x.TglMulai)) + '<br>' + esc(fmtTgl(x.TglSelesai)) + '</td><td>' + pillStatus(x.Status) + '</td><td class="right" style="white-space:nowrap">' + aksiBtn('formPen', x.PenempatanID, 'edit') + ' ' + aksiBtn('hapusPen', x.PenempatanID, 'delete') + '</td></tr>'), 'Belum ada penempatan pada Periode ' + p + '.') +
+          '<td>' + pill(x.Skema + ' periode', 'info') + '</td><td><b>' + esc(nmDudi(x.DUDIID)) + '</b></td><td class="small">' + esc(nmGuru(x.GuruID)) + '</td><td class="small">' + esc(nmIns(x.InstrukturID)) + '</td><td class="small" style="min-width:200px">' + K.ringkasPekerjaan(x) + '</td>' +
+          '<td class="small">' + esc(fmtTgl(x.TglMulai)) + '<br>' + esc(fmtTgl(x.TglSelesai)) + '</td><td>' + pillStatus(x.Status) + '</td><td class="right" style="white-space:nowrap">' + '<button class="btn ghost xs" data-act="aturPekerjaan" data-nis="' + esc(x.NIS) + '" data-periode="' + esc(x.Periode) + '" title="Koreksi pekerjaan spesifik">' + ic('engineering') + '</button> ' + aksiBtn('formPen', x.PenempatanID, 'edit', 'ghost', 'Ubah penempatan') + ' ' + aksiBtn('hapusPen', x.PenempatanID, 'delete', 'ghost', 'Hapus') + '</td></tr>'), 'Belum ada penempatan pada Periode ' + p + '.') +
         (belum.length ? '<div class="card mt"><div class="card-h"><h3 class="grow">Belum ditempatkan (Periode ' + p + ')</h3></div><div class="row wrap">' + belum.slice(0, 60).map(s => '<button class="tag" style="cursor:pointer;border:0" data-act="formPen" data-nis="' + esc(s.NIS) + '" data-periode="' + p + '">' + esc(s.Nama) + ' +</button>').join('') + '</div></div>' : '');
     }
   };
@@ -126,10 +126,9 @@
       { name: 'Skema', label: 'Skema', type: 'select', options: [{ v: '1', l: '1 Periode' }, { v: '2', l: '2 Periode' }], value: x.Skema, kosong: false }, { name: 'Periode', label: 'Periode', type: 'select', options: ['1', '2'], value: x.Periode, kosong: false },
       { name: 'DUDIID', label: 'DUDI (terisi/kuota)', type: 'select', req: true, full: true, options: opsiDudiKuota(), value: x.DUDIID }, { name: 'GuruID', label: 'Guru Pembimbing', type: 'select', req: true, options: opsiGuru(), value: x.GuruID || (p1 || {}).GuruID },
       { name: 'InstrukturID', label: 'Instruktur lapangan', type: 'select', options: D().instruktur.filter(i => i.DUDIID === x.DUDIID).map(i => ({ v: i.InstrukturID, l: i.Nama })), value: x.InstrukturID, ph: '— Pilih DUDI dulu —' },
-      { name: 'PekerjaanSpesifik', label: 'Pekerjaan spesifik', value: x.PekerjaanSpesifik, attr: ' list="dl-pek"', full: true, help: 'Menentukan indikator Lembar Observasi.' },
       { name: 'TglMulai', label: 'Tanggal mulai', type: 'date', req: true, value: x.TglMulai }, { name: 'TglSelesai', label: 'Tanggal selesai', type: 'date', req: true, value: x.TglSelesai },
       { name: 'Status', label: 'Status', type: 'select', options: ['Aktif', 'Selesai', 'Batal'], value: x.Status, kosong: false }],
-      extra: '<datalist id="dl-pek">' + pekerjaan().map(p => '<option value="' + esc(p) + '">').join('') + '</datalist>',
+      intro: '<div class="alert info mb">' + ic('engineering') + '<div><p class="small">Pekerjaan spesifik dipilih oleh <b>Instruktur</b> dari daftar di menu <a href="#/pekerjaan">Pekerjaan & Sub</a>. Admin dapat mengoreksinya lewat tombol ' + ic('engineering') + ' di tabel penempatan.</p></div></div>',
       olah: d => Object.assign(d, { PenempatanID: x.PenempatanID || '' }) });
     const f = m.el.querySelector('#fm');
     f.DUDIID.onchange = () => { f.InstrukturID.innerHTML = '<option value="">— Pilih —</option>' + D().instruktur.filter(i => i.DUDIID === f.DUDIID.value).map(i => '<option value="' + esc(i.InstrukturID) + '">' + esc(i.Nama) + '</option>').join(''); };
@@ -262,13 +261,33 @@
 
   /* ======================= PESAN (pantau) ======================= */
   Pages['ADMIN:pesan'] = {
-    render() {
-      const list = D().pesan.slice().sort((a, b) => b.DibuatPada.localeCompare(a.DibuatPada)).filter(m => cari({ s: m.Subjek, i: m.Isi, n: nmSiswa(m.NIS) }, S.q));
-      return head(ic('emergency') + ' Monitoring PKL', 'Pesan Darurat (Pantau)', 'Seluruh pesan darurat Instruktur → Guru Pembimbing beserta status balasannya.') +
-        tblWrap(['Waktu', 'Dari', 'Ke', 'Siswa', 'Subjek & Isi', 'Status'], list.map(m => '<tr class="' + (m.Status === 'Baru' ? 'warn-row' : '') + '"><td class="small">' + esc(fmtWaktu(m.DibuatPada)) + '</td><td class="small">' + esc(nmIns(m.InstrukturID)) + '</td><td class="small">' + esc(nmGuru(m.GuruID)) + '</td><td class="small">' + esc(nmSiswa(m.NIS)) + '</td>' +
+    render(param) {
+      const semua = D().pesan.slice().sort((a, b) => b.DibuatPada.localeCompare(a.DibuatPada)).filter(m => cari({ s: m.Subjek, i: m.Isi, n: nmSiswa(m.NIS), d: nmIns(m.InstrukturID) }, S.q));
+      const pantau = param === 'pantau', keAdmin = semua.filter(m => m.Tujuan === 'ADMIN'), keGuru = semua.filter(m => m.Tujuan !== 'ADMIN'), baru = keAdmin.filter(m => m.Status === 'Baru').length;
+      const tab = '<div class="tabs"><button class="' + (pantau ? '' : 'on') + '" data-act="go" data-href="#/pesan">' + ic('inbox') + 'Untuk Admin ' + (baru ? pill(baru, 'bad') : '') + '</button><button class="' + (pantau ? 'on' : '') + '" data-act="go" data-href="#/pesan/pantau">' + ic('visibility') + 'Instruktur → Guru (pantau)</button></div>';
+      const judul = head(ic('emergency') + ' Monitoring PKL', 'Pesan Darurat', 'Pesan dari instruktur DU/DI untuk Admin (usulan pekerjaan spesifik, kendala aplikasi, koreksi data), dan pantauan pesan Instruktur → Guru Pembimbing.') + tab;
+      if (pantau) return judul +
+        tblWrap(['Waktu', 'Dari', 'Ke', 'Siswa', 'Subjek & Isi', 'Status'], keGuru.map(m => '<tr class="' + (m.Status === 'Baru' ? 'warn-row' : '') + '"><td class="small">' + esc(fmtWaktu(m.DibuatPada)) + '</td><td class="small">' + esc(nmIns(m.InstrukturID)) + '</td><td class="small">' + esc(nmGuru(m.GuruID)) + '</td><td class="small">' + esc(nmSiswa(m.NIS)) + '</td>' +
           '<td><b class="small">' + esc(m.Subjek) + '</b><div class="xs muted">' + esc(m.Isi) + '</div>' + (m.Balasan ? '<div class="xs" style="color:var(--teal-700)">↳ ' + esc(m.Balasan) + '</div>' : '') + '</td><td>' + pillStatus(m.Status) + '</td></tr>'), 'Belum ada pesan darurat.');
+      const kartu = m => {
+        const ins = S.ix.ins[m.InstrukturID] || {}, usul = m.Kategori === 'Usulan pekerjaan spesifik', nama = usul ? String(m.Subjek).replace(/^Usulan pekerjaan:\s*/i, '').trim() : '';
+        const subs = usul ? String(m.Isi).split('\n').filter(x => /^\s*-\s+/.test(x)).map(x => x.replace(/^\s*-\s+/, '').trim()) : [];
+        const sudahAda = usul && katalogPekerjaan().some(k => k.toLowerCase() === nama.toLowerCase());
+        return '<div class="card"><div class="row wrap gap-s">' + pill(m.Kategori || 'Lainnya', usul ? 'info' : 'mute') + pillStatus(m.Status) + '</div><h3 style="margin-top:8px">' + esc(m.Subjek) + '</h3>' +
+          '<div class="small muted">Dari ' + esc(ins.Nama || '-') + ' · ' + esc(nmDudi(ins.DUDIID)) + (m.NIS ? ' · siswa ' + esc(nmSiswa(m.NIS)) : '') + ' · ' + esc(fmtWaktu(m.DibuatPada)) + '</div>' +
+          '<p class="small" style="white-space:pre-wrap;line-height:1.6">' + esc(m.Isi) + '</p>' +
+          (m.Balasan ? '<div class="alert">' + ic('reply') + '<div><h4 class="small">Balasan ' + esc(m.DibalasOleh || 'Admin') + ' · ' + esc(fmtWaktu(m.DibalasPada)) + '</h4><p class="small">' + esc(m.Balasan) + '</p></div></div>' : '') +
+          '<div class="mt"><textarea class="input" rows="2" id="bal-' + esc(m.PesanID) + '" placeholder="Tulis balasan untuk instruktur…" aria-label="Balasan"></textarea></div>' +
+          '<div class="row wrap gap-s mt-s"><button class="btn sm" data-act="balasAdmin" data-id="' + esc(m.PesanID) + '">' + ic('send') + 'Kirim balasan</button>' +
+          (usul ? (sudahAda ? pill('Sudah ada di daftar pekerjaan', 'ok') : '<button class="btn sec sm" data-act="formKatalog" data-baru="' + esc(nama) + '" data-subs="' + esc(subs.join('\n')) + '">' + ic('playlist_add') + 'Tambahkan ke Pekerjaan & Sub</button>') : '') +
+          (m.Status !== 'Selesai' ? '<button class="btn ghost sm" data-act="selesaiPesan" data-id="' + esc(m.PesanID) + '">' + ic('task_alt') + 'Tandai selesai</button>' : '') +
+          (ins.NoHP ? '<a class="btn ghost sm" target="_blank" rel="noopener" href="' + esc(waLink(ins.NoHP)) + '">' + ic('call') + 'WA</a>' : '') + '</div></div>';
+      };
+      return judul + (keAdmin.length ? '<div class="grid" style="gap:14px">' + keAdmin.map(kartu).join('') + '</div>' : '<div class="card empty">' + ic('mark_email_read') + 'Belum ada pesan untuk Admin.</div>');
     }
   };
+  Act.balasAdmin = btn => { const t = document.getElementById('bal-' + btn.dataset.id), v = t ? t.value.trim() : ''; if (!v) { toast('Tulis balasan terlebih dahulu.', 'warn'); return; } simpan(btn, 'pesan.balas', { PesanID: btn.dataset.id, Balasan: v }); };
+  Act.selesaiPesan = btn => simpan(btn, 'pesan.balas', { PesanID: btn.dataset.id, Balasan: '', Status: 'Selesai' });
 
   /* ======================= REKAP & LAPORAN ======================= */
   Pages['ADMIN:rekap'] = {
@@ -318,17 +337,73 @@
   Act.pilihSemuaKartu = el => document.querySelectorAll('.pilih-kartu').forEach(c => (c.checked = el.checked));
   Act.cetakTerpilih = el => { const nis = [...document.querySelectorAll('.pilih-kartu:checked')].map(c => c.value); if (!nis.length) { toast('Pilih siswa.', 'warn'); return; } el.dataset.nis = nis.join(','); Act.cetakKartu(el); };
 
+  /* ======================= PEKERJAAN SPESIFIK & SUB ======================= */
+  Pages['ADMIN:pekerjaan'] = {
+    render() {
+      const kat = katalogPekerjaan(), pa = periodeAktif(), pen = D().penempatan.filter(p => String(p.Periode) === pa);
+      const pakai = pk => pen.filter(p => daftarPekerjaan(p.PekerjaanSpesifik).some(x => x.toLowerCase() === pk.toLowerCase())).length;
+      const kartu = (pk, umum) => {
+        const subs = subDari(pk), n = umum ? 0 : pakai(pk);
+        return '<div class="card"><div class="card-h"><span class="ic ' + (umum ? 'amber' : 'teal') + '">' + ic(umum ? 'rule' : 'engineering') + '</span><div class="grow"><h3>' + esc(umum ? 'Indikator Umum' : pk) + '</h3><div class="sub">' +
+          (umum ? 'Cadangan untuk siswa yang belum dipilihkan pekerjaan, atau pekerjaan tanpa sub.' : subs.length + ' sub pekerjaan · dipilih untuk ' + n + ' siswa (Periode ' + pa + ')') + '</div></div>' +
+          '<button class="btn ghost sm" data-act="formKatalog" data-pk="' + esc(pk) + '">' + ic('edit') + 'Ubah</button>' + (umum ? '' : '<button class="btn ghost sm" data-act="hapusKatalog" data-pk="' + esc(pk) + '" aria-label="Hapus ' + esc(pk) + '">' + ic('delete') + '</button>') + '</div>' +
+          (subs.length ? '<div class="sub-list">' + subs.map((x, i) => '<div class="sub-row"><span class="aspek-no">' + (i + 1) + '</span><div class="grow"><div class="b small">' + esc(x.Aspek) + '</div>' + (x.Deskripsi ? '<div class="xs muted">' + esc(x.Deskripsi) + '</div>' : '') + '</div>' +
+            x.obs.map(o => pill(o === 'OBS1' ? 'Obs 1' : 'Obs 2', 'info')).join(' ') + ' ' + pill('Bobot ' + (x.Bobot || 0), 'mute') + '</div>').join('') + '</div>'
+            : '<div class="alert warn">' + ic('info') + '<div><p class="small">Belum ada sub pekerjaan. Siswa dengan pekerjaan ini dinilai dengan indikator Umum.</p></div></div>') + '</div>';
+      };
+      return head(ic('engineering') + ' Sistem', 'Pekerjaan Spesifik & Sub Pekerjaan', 'Admin menyusun daftar pekerjaan beserta sub pekerjaannya. Instruktur memilih pekerjaan dan sub yang dikerjakan tiap siswa; sub terpilih menjadi aspek Lembar Observasi 1 & 2.',
+          '<button class="btn" data-act="formKatalog">' + ic('add') + 'Tambah Pekerjaan</button>') +
+        '<div class="grid g2">' + kat.map(k => kartu(k)).join('') + '</div>' + '<div class="mt">' + kartu('Umum', true) + '</div>';
+    }
+  };
+  Act.formKatalog = el => {
+    const pk = el.dataset.pk || '', umum = pk.toLowerCase() === 'umum', usulSub = el.dataset.subs ? el.dataset.subs.split('\n').filter(Boolean).map(a => ({ Aspek: a })) : null;
+    const subs = pk ? subDari(pk) : (usulSub || []);
+    const baris = x => '<div class="kat-row" data-row data-id1="' + esc((x.id || {}).OBS1 || '') + '" data-id2="' + esc((x.id || {}).OBS2 || '') + '">' +
+      '<input class="input" data-f="Aspek" maxlength="150" placeholder="Nama sub pekerjaan" aria-label="Nama sub pekerjaan" value="' + esc(x.Aspek || '') + '">' +
+      '<input class="input" data-f="Deskripsi" maxlength="400" placeholder="Indikator / keterangan (opsional)" aria-label="Keterangan" value="' + esc(x.Deskripsi || '') + '">' +
+      '<input class="input" data-f="Bobot" type="number" min="0" max="100" aria-label="Bobot" title="Bobot" value="' + esc(x.Bobot == null ? 20 : x.Bobot) + '">' +
+      '<label class="check small" title="Dinilai di Lembar Observasi 1"><input type="checkbox" data-f="o1"' + (!x.obs || x.obs.indexOf('OBS1') > -1 ? ' checked' : '') + '>Obs 1</label>' +
+      '<label class="check small" title="Dinilai di Lembar Observasi 2"><input type="checkbox" data-f="o2"' + (!x.obs || x.obs.indexOf('OBS2') > -1 ? ' checked' : '') + '>Obs 2</label>' +
+      '<button type="button" class="btn ghost xs" data-act="katHapusBaris" aria-label="Hapus baris">' + ic('close') + '</button></div>';
+    const m = modal({ title: pk ? (umum ? 'Indikator Umum' : 'Ubah Pekerjaan') : 'Tambah Pekerjaan Spesifik', icon: 'engineering', size: 'lg',
+      body: '<div class="field"><label for="kat-nama">Nama pekerjaan spesifik</label><input class="input" id="kat-nama" maxlength="80" value="' + esc(umum ? 'Umum' : pk || el.dataset.baru || '') + '"' + (umum ? ' disabled' : '') + ' placeholder="Contoh: Administrasi Server"></div>' +
+        '<div class="row between wrap mt"><b class="small">Sub pekerjaan</b><span class="xs muted">Bobot relatif (dihitung terbobot). Obs 1 / Obs 2 = dinilai di lembar mana.</span></div>' +
+        '<div class="kat-list mt-s" id="kat-list">' + (subs.length ? subs : [{}, {}, {}]).map(baris).join('') + '</div>' +
+        '<button type="button" class="btn ghost sm mt-s" data-act="katTambahBaris">' + ic('add') + 'Tambah sub pekerjaan</button><template id="tpl-kat">' + baris({}) + '</template>',
+      foot: '<button class="btn ghost" data-x>Batal</button><button class="btn" data-ok>' + ic('save') + 'Simpan</button>' });
+    m.el.querySelector('[data-ok]').onclick = e => {
+      const nama = umum ? 'Umum' : m.el.querySelector('#kat-nama').value.trim();
+      if (!nama) { toast('Isi nama pekerjaan.', 'warn'); return; }
+      const rows = [...m.el.querySelectorAll('[data-row]')].map(r => {
+        const g = f => r.querySelector('[data-f=' + f + ']'), obs = [], id = {};
+        if (g('o1').checked) obs.push('OBS1'); if (g('o2').checked) obs.push('OBS2');
+        if (r.dataset.id1) id.OBS1 = r.dataset.id1; if (r.dataset.id2) id.OBS2 = r.dataset.id2;
+        return { Aspek: g('Aspek').value.trim(), Deskripsi: g('Deskripsi').value.trim(), Bobot: g('Bobot').value, obs, id };
+      }).filter(x => x.Aspek);
+      if (!rows.length) { toast('Isi minimal satu sub pekerjaan.', 'warn'); return; }
+      simpan(e.currentTarget, 'katalog.simpan', { nama, namaLama: pk, subs: rows }, { tutup: m.close });
+    };
+  };
+  Act.katTambahBaris = () => { const t = document.getElementById('tpl-kat'); document.getElementById('kat-list').appendChild(t.content.cloneNode(true)); };
+  Act.katHapusBaris = el => { const r = el.closest('[data-row]'); if (document.querySelectorAll('#kat-list [data-row]').length > 1) r.remove(); else r.querySelectorAll('input[data-f=Aspek],input[data-f=Deskripsi]').forEach(i => (i.value = '')); };
+  Act.hapusKatalog = async el => {
+    const pk = el.dataset.pk;
+    if (await konfirmasi('Hapus pekerjaan <b>' + esc(pk) + '</b> dari daftar? Siswa yang sudah memilihnya akan dinilai dengan indikator Umum. Nilai yang sudah tersimpan tidak hilang.', { danger: true, ok: 'Hapus' })) simpan(el, 'katalog.hapus', { nama: pk });
+  };
+
   /* ======================= INSTRUMEN ======================= */
   Pages['ADMIN:instrumen'] = {
     render(param) {
-      const [jenisP, pekP] = String(param || '').split('|'), jenis = JENIS[jenisP] ? jenisP : 'OBS1', obs = jenis === 'OBS1' || jenis === 'OBS2';
+      const [jenisP, pekP] = String(param || '').split('|'), jenis = JENIS[jenisP] && !/^OBS/.test(jenisP) ? jenisP : 'PEMBIMBING', obs = false;
       const pekList = [...new Set(['Umum'].concat(pekerjaan(), D().instrumen.filter(i => i.PekerjaanSpesifik).map(i => i.PekerjaanSpesifik)))];
       const pek = obs ? (pekP || pekList[0]) : '';
       const items = D().instrumen.filter(i => i.Jenis === jenis && (!obs || (i.PekerjaanSpesifik || '').toLowerCase() === pek.toLowerCase())).sort((a, b) => a.No - b.No);
       const baris = (i, k) => '<div class="aspek" data-item data-id="' + esc(i.InstrumenID || '') + '"><div class="row"><span class="aspek-no">' + (k + 1) + '</span><input class="input" data-f="Aspek" value="' + esc(i.Aspek || '') + '" placeholder="Nama aspek/indikator"><input class="input" data-f="Bobot" type="number" min="0" max="100" value="' + esc(i.Bobot || 0) + '" style="width:90px" data-inp="bobotTotal" aria-label="Bobot"><button class="btn ghost xs" data-act="hapusAspek">' + ic('close') + '</button></div><textarea class="input mt-s" data-f="Deskripsi" rows="2" placeholder="Deskripsi / kriteria">' + esc(i.Deskripsi || '') + '</textarea></div>';
       const tot = items.reduce((a, i) => a + (+i.Bobot || 0), 0);
       return head(ic('checklist') + ' Sistem', 'Instrumen Penilaian Resmi', 'Atur indikator & bobot tiap komponen. Lembar Observasi diatur per Pekerjaan Spesifik (fallback "Umum"). Aspek yang dihapus dinonaktifkan agar nilai lama tetap terbaca.') +
-        '<div class="tabs">' + Object.keys(JENIS).map(j => '<button class="' + (j === jenis ? 'on' : '') + '" data-act="go" data-href="#/instrumen/' + j + '">' + esc(JENIS[j]) + '</button>').join('') + '</div>' +
+        '<div class="alert info mb">' + ic('engineering') + '<div><p class="small">Aspek <b>Lembar Observasi 1 & 2</b> sekarang diatur sebagai <b>sub pekerjaan</b> di menu <a href="#/pekerjaan">Pekerjaan & Sub</a>.</p></div></div>' +
+        '<div class="tabs">' + Object.keys(JENIS).filter(j => !/^OBS/.test(j)).map(j => '<button class="' + (j === jenis ? 'on' : '') + '" data-act="go" data-href="#/instrumen/' + j + '">' + esc(JENIS[j]) + '</button>').join('') + '</div>' +
         (obs ? '<div class="toolbar"><span class="b small">Pekerjaan spesifik:</span><select class="input" data-chg="pilihPek" data-j="' + jenis + '">' + pekList.map(p => '<option' + (p === pek ? ' selected' : '') + '>' + esc(p) + '</option>').join('') + '</select><button class="btn ghost sm" data-act="pekBaru" data-j="' + jenis + '">' + ic('add') + 'Pekerjaan baru</button></div>' : '') +
         '<div class="with-panel"><div id="ins-list">' + (items.length ? items.map(baris).join('') : baris({}, 0)) + '<button class="btn sec mt" data-act="tambahAspek">' + ic('add') + 'Tambah aspek</button></div>' +
         '<div class="card sticky-side"><span class="stat-lbl">Total bobot</span><div class="big-score mt-s" id="tot-bobot">' + tot + '</div><p class="small muted">Disarankan total 100. Nilai dihitung terbobot (Σ skor×bobot / Σ bobot).</p><button class="btn block lg" data-act="simpanInstrumen" data-j="' + jenis + '" data-pek="' + esc(pek) + '">' + ic('save') + 'Simpan Instrumen</button></div></div>' +
@@ -359,7 +434,7 @@
         '<div class="card"><div class="card-h"><span class="ic rose">' + ic('rule') + '</span><h3>Aturan PKL</h3></div><div class="form-grid">' + f('AMBANG_ALFA', 'Ambang Alfa / periode', { type: 'number', min: 1 }) + f('AMBANG_IZIN', 'Ambang Izin / periode', { type: 'number', min: 1 }) +
         f('KKM', 'KKM nilai PKL', { type: 'number', min: 0, max: 100 }) + f('SESI_JAM', 'Masa sesi login (jam)', { type: 'number', min: 1, max: 72 }) + '</div>' +
         '<div class="lbl mt">Bobot nilai akhir (%)</div><div class="form-grid mt-s">' + Object.keys(JENIS).map(j => fld({ name: 'bb_' + j, label: JENIS[j], type: 'number', min: 0, max: 100, value: bb[j] || 0 })).join('') + '</div>' +
-        f('PEKERJAAN_SPESIFIK', 'Daftar pekerjaan spesifik (pisah ;)', { type: 'textarea', rows: 2 }) + '</div></div>' +
+        '<div class="field"><label>Pekerjaan spesifik</label><div class="row wrap gap-s">' + (katalogPekerjaan().map(k => '<span class="tag">' + esc(k) + '</span>').join(' ') || '<span class="small muted">Belum ada.</span>') + '</div><div class="help">Dikelola di menu <a href="#/pekerjaan">Pekerjaan & Sub</a>.</div></div></div></div>' +
         '<div class="card mt"><div class="card-h"><span class="ic indigo">' + ic('sync') + '</span><div class="grow"><h3>Pemetaan E-Jurnal</h3><div class="sub">Nama sheet & kolom di spreadsheet E-Jurnal (JSON). Sumber hanya dibaca.</div></div></div>' +
         f('EJ_PETA', 'EJ_PETA', { type: 'textarea', rows: 4 }) + f('EJ_FILTER_KELAS', 'Filter kelas siswa (mengandung teks)') + '</div>' +
         '<div class="row mt" style="justify-content:flex-end"><button class="btn lg" data-act="simpanSetting">' + ic('save') + 'Simpan Pengaturan</button></div></form>' +

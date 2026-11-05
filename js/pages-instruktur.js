@@ -91,16 +91,33 @@
   };
 
   /* ---------- Observasi & penilaian akhir ---------- */
+  /* ---------- Pekerjaan spesifik siswa (dipilih instruktur dari daftar Admin) ---------- */
+  Pages['INSTRUKTUR:pekerjaan'] = {
+    render() {
+      const sis = siswaSaya(), kat = katalogPekerjaan(), belum = sis.filter(x => !(penOf(x.NIS) || {}).PekerjaanSpesifik).length;
+      return head(ic('engineering') + ' Aktivitas Lapangan', 'Pekerjaan Spesifik Siswa', 'Pilih pekerjaan dan sub pekerjaan yang benar-benar dikerjakan tiap siswa. Sub yang dipilih menjadi aspek penilaian di Lembar Observasi 1 & 2.',
+          '<button class="btn ghost" data-act="usulPekerjaan">' + ic('add_comment') + 'Usulkan pekerjaan baru</button>') +
+        (belum ? '<div class="alert warn mb">' + ic('assignment_late') + '<div><h4>' + belum + ' siswa belum dipilihkan pekerjaannya</h4><p class="small">Selama belum dipilih, Lembar Observasi memakai indikator Umum.</p></div></div>' : '') +
+        (!kat.length ? '<div class="card empty">' + ic('engineering') + 'Admin belum mengisi daftar pekerjaan spesifik. Hubungi Koordinator PKL.</div>' :
+        sis.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Siswa</th><th>Pekerjaan & sub pekerjaan</th><th>Diatur oleh</th><th></th></tr></thead><tbody>' + sis.map(x => {
+          const pen = penOf(x.NIS) || {}, kunci = rekap(x.NIS).kunci;
+          return '<tr><td><div class="who">' + av(x.Nama, x.FotoURL, 'av-xs') + '<div><div class="n">' + esc(x.Nama) + '</div><div class="s">NIS ' + esc(x.NIS) + '</div></div></div></td><td>' + K.ringkasPekerjaan(pen) + '</td>' +
+            '<td class="xs muted">' + esc(pen.PekerjaanDiaturOleh || '-') + '</td><td class="right">' + (kunci ? pill('Nilai ditutup', 'mute') : '<button class="btn ' + (pen.PekerjaanSpesifik ? 'sec' : '') + ' sm" data-act="aturPekerjaan" data-nis="' + esc(x.NIS) + '" data-periode="' + esc(pen.Periode) + '">' + ic(pen.PekerjaanSpesifik ? 'edit' : 'add') + (pen.PekerjaanSpesifik ? 'Ubah' : 'Pilih pekerjaan') + '</button>') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '<div class="card empty">' + ic('group_off') + 'Belum ada siswa.</div>');
+    }
+  };
+
   Pages['INSTRUKTUR:penilaian'] = {
     render(param) {
       const [nisP, jenisP] = String(param || '').split('/'), sis = siswaSaya();
       if (!sis.length) return head(ic('grading') + ' Instrumen Baku PKL', 'Observasi & Penilaian') + '<div class="card empty">' + ic('group_off') + 'Belum ada siswa.</div>';
       const s = sis.find(x => x.NIS === nisP) || sis[0], jenis = ['OBS1', 'OBS2', 'AKHIR'].indexOf(jenisP) > -1 ? jenisP : 'OBS1', pen = penOf(s.NIS) || {}, rk = rekap(s.NIS);
       const judul = { OBS1: 'Lembar Observasi 1', OBS2: 'Lembar Observasi 2', AKHIR: 'Penilaian Akhir Praktik Kerja Lapangan' }[jenis];
-      return head(ic('workspace_premium') + ' Instrumen Baku PKL ' + esc(P('TAHUN_AJARAN')) + ' · ' + (jenis === 'AKHIR' ? 'Evaluasi Kelulusan' : 'Kompetensi Spesifik'), judul + (jenis !== 'AKHIR' ? ': ' + esc(pen.PekerjaanSpesifik || 'Umum') : ''),
+      return head(ic('workspace_premium') + ' Instrumen Baku PKL ' + esc(P('TAHUN_AJARAN')) + ' · ' + (jenis === 'AKHIR' ? 'Evaluasi Kelulusan' : 'Kompetensi Spesifik'), judul + (jenis !== 'AKHIR' ? ': ' + esc(teksPekerjaan(pen.PekerjaanSpesifik) || 'Umum') : ''),
           jenis === 'AKHIR' ? 'Penilaian komprehensif performa siswa selama masa magang: kompetensi teknis, etos kerja, kedisiplinan K3, dan laporan kerja.' : 'Indikator teknis menyesuaikan Pekerjaan Spesifik siswa. Geser penggeser skor atau ketik angka 0–100.',
           '<div class="seg">' + ['OBS1', 'OBS2', 'AKHIR'].map(j => '<button class="' + (j === jenis ? 'on' : '') + '" data-act="go" data-href="#/penilaian/' + s.NIS + '/' + j + '">' + esc({ OBS1: 'Obs 1', OBS2: 'Obs 2', AKHIR: 'Penilaian Akhir' }[j]) + (rk.nilai[j] !== undefined ? ' ' + pill(num(rk.nilai[j]), 'ok') : '') + '</button>').join('') + '</div>') +
         '<div class="card tight mb"><div class="xs b muted mb">PILIH SISWA PRAKTIKAN (' + sis.length + ')</div><div class="row wrap">' + sis.map(x => { const r2 = rekap(x.NIS); return '<a class="li" style="min-width:200px;flex:1;max-width:260px;' + (x.NIS === s.NIS ? 'border-color:var(--teal);background:var(--teal-50)' : '') + '" href="#/penilaian/' + x.NIS + '/' + jenis + '">' + av(x.Nama, x.FotoURL, 'av-xs') + '<div class="grow"><div class="b small ellipsis">' + esc(x.Nama) + '</div><div class="xs muted">' + (r2.nilai[jenis] !== undefined ? 'Skor ' + num(r2.nilai[jenis]) : 'Menunggu') + '</div></div>' + (x.NIS === s.NIS ? pill('Aktif', 'ok') : '') + '</a>'; }).join('') + '</div>' +
+        (jenis !== 'AKHIR' ? '<div class="card tight mb"><div class="row wrap" style="gap:10px"><span class="xs b muted">PEKERJAAN SPESIFIK</span><div class="grow">' + K.ringkasPekerjaan(pen) + '</div>' + (rk.kunci ? '' : '<button class="btn ghost sm" data-act="aturPekerjaan" data-nis="' + esc(s.NIS) + '" data-periode="' + esc(pen.Periode) + '">' + ic('engineering') + (pen.PekerjaanSpesifik ? 'Ubah pekerjaan' : 'Pilih pekerjaan') + '</button>') + '</div></div>' : '') +
         '<div class="row wrap small muted mt-s">' + ic('apartment') + esc(nmDudi(pen.DUDIID)) + ' · ' + ic('date_range') + esc(fmtTgl(pen.TglMulai)) + ' – ' + esc(fmtTgl(pen.TglSelesai)) + ' · Kehadiran ' + num(rk.persen, 0) + '% (' + rk.t.A + ' Alfa)</div></div>' +
         K.formNilai(s.NIS, pen.Periode, jenis, true);
     }
@@ -116,20 +133,41 @@
 
   /* ---------- Pesan darurat (kirim) ---------- */
   Pages['INSTRUKTUR:pesan'] = {
-    render() {
-      const sis = siswaSaya(), list = S.data.pesan.slice().sort((a, b) => b.DibuatPada.localeCompare(a.DibuatPada));
-      return head(ic('emergency') + ' Komunikasi & Bantuan', 'Pesan Darurat ke Guru Pembimbing', 'Gunakan untuk kendala mendesak: siswa tidak hadir tanpa kabar, insiden K3, atau masalah perilaku.') +
-        '<div class="grid g2"><div class="card"><div class="card-h"><span class="ic rose">' + ic('send') + '</span><h3>Kirim Pesan Darurat</h3></div><form id="f-pesan" data-dirty>' +
-        fld({ name: 'NIS', label: 'Siswa', type: 'select', req: true, options: sis.map(s => ({ v: s.NIS, l: s.Nama + ' — Guru: ' + nmGuru((penOf(s.NIS) || {}).GuruID) })) }) +
+    render(param) {
+      const sis = siswaSaya(), list = S.data.pesan.slice().sort((a, b) => b.DibuatPada.localeCompare(a.DibuatPada)), keAdmin = param === 'admin';
+      const tujuan = '<div class="seg mb" role="tablist"><button type="button" class="' + (keAdmin ? '' : 'on') + '" data-act="go" data-href="#/pesan">' + ic('school') + 'Ke Guru Pembimbing</button><button type="button" class="' + (keAdmin ? 'on' : '') + '" data-act="go" data-href="#/pesan/admin">' + ic('admin_panel_settings') + 'Ke Admin / Koordinator</button></div>';
+      const formGuru = fld({ name: 'NIS', label: 'Siswa', type: 'select', req: true, options: sis.map(s => ({ v: s.NIS, l: s.Nama + ' — Guru: ' + nmGuru((penOf(s.NIS) || {}).GuruID) })) }) +
         fld({ name: 'Subjek', label: 'Subjek', req: true, ph: 'Contoh: Siswa tidak hadir tanpa keterangan' }) + fld({ name: 'Isi', label: 'Isi pesan', type: 'textarea', req: true, rows: 5, ph: 'Jelaskan kronologi singkat…' }) +
-        '<button class="btn danger block" data-act="kirimPesan">' + ic('send') + 'Kirim ke Guru Pembimbing</button></form></div>' +
-        '<div class="card"><div class="card-h"><h3 class="grow">Pesan Terkirim</h3>' + pill(list.length, 'info') + '</div>' + (list.length ? '<div class="list">' + list.map(m => '<div class="li"><span class="ic ' + (m.Status === 'Dibalas' ? 'teal' : 'amber') + '">' + ic(m.Status === 'Dibalas' ? 'mark_chat_read' : 'schedule_send') + '</span><div class="grow"><div class="row between"><b class="small">' + esc(m.Subjek) + '</b>' + pillStatus(m.Status) + '</div><div class="xs muted">' + esc(nmSiswa(m.NIS)) + ' · ke ' + esc(nmGuru(m.GuruID)) + ' · ' + esc(fmtWaktu(m.DibuatPada)) + '</div><p class="small" style="margin:6px 0 0">' + esc(m.Isi) + '</p>' +
-          (m.Balasan ? '<div class="alert mt-s">' + ic('reply') + '<div><h4 class="small">Balasan guru · ' + esc(fmtWaktu(m.DibalasPada)) + '</h4><p class="small">' + esc(m.Balasan) + '</p></div></div>' : '') + '</div></div>').join('') + '</div>' : '<div class="empty">Belum ada pesan.</div>') + '</div></div>';
+        '<button class="btn danger block" data-act="kirimPesan">' + ic('send') + 'Kirim ke Guru Pembimbing</button>';
+      const formAdmin = '<input type="hidden" name="Tujuan" value="ADMIN">' +
+        fld({ name: 'Kategori', label: 'Kategori', type: 'select', kosong: false, options: ['Usulan pekerjaan spesifik', 'Kendala aplikasi / akun', 'Data siswa / penempatan', 'Lainnya'] }) +
+        fld({ name: 'NIS', label: 'Siswa terkait (opsional)', type: 'select', ph: '— Tidak terkait siswa tertentu —', options: sis.map(s => ({ v: s.NIS, l: s.Nama })) }) +
+        fld({ name: 'Subjek', label: 'Subjek', req: true, ph: 'Contoh: Usulan pekerjaan Instalasi CCTV' }) + fld({ name: 'Isi', label: 'Isi pesan', type: 'textarea', req: true, rows: 5, ph: 'Untuk usulan pekerjaan, tuliskan juga sub pekerjaannya.' }) +
+        '<div class="row wrap gap-s"><button class="btn block" data-act="kirimPesan">' + ic('send') + 'Kirim ke Admin</button><button type="button" class="btn ghost block" data-act="usulPekerjaan">' + ic('engineering') + 'Isi formulir usulan pekerjaan</button></div>';
+      return head(ic('emergency') + ' Komunikasi & Bantuan', 'Pesan Darurat', keAdmin ? 'Kirim usulan pekerjaan spesifik baru, kendala aplikasi, atau koreksi data ke Admin / Koordinator PKL.' : 'Gunakan untuk kendala mendesak: siswa tidak hadir tanpa kabar, insiden K3, atau masalah perilaku.') + tujuan +
+        '<div class="grid g2"><div class="card"><div class="card-h"><span class="ic ' + (keAdmin ? 'teal' : 'rose') + '">' + ic('send') + '</span><h3>' + (keAdmin ? 'Pesan ke Admin / Koordinator' : 'Kirim Pesan Darurat') + '</h3></div><form id="f-pesan" data-dirty>' + (keAdmin ? formAdmin : formGuru) + '</form></div>' +
+        '<div class="card"><div class="card-h"><h3 class="grow">Pesan Terkirim</h3>' + pill(list.length, 'info') + '</div>' + (list.length ? '<div class="list">' + list.map(m => { const adm = m.Tujuan === 'ADMIN';
+          return '<div class="li"><span class="ic ' + (m.Balasan ? 'teal' : 'amber') + '">' + ic(m.Balasan ? 'mark_chat_read' : 'schedule_send') + '</span><div class="grow"><div class="row between"><b class="small">' + esc(m.Subjek) + '</b>' + pillStatus(m.Status) + '</div><div class="xs muted">' + (m.NIS ? esc(nmSiswa(m.NIS)) + ' · ' : '') + 'ke ' + (adm ? 'Admin / Koordinator' + (m.Kategori ? ' · ' + esc(m.Kategori) : '') : esc(nmGuru(m.GuruID))) + ' · ' + esc(fmtWaktu(m.DibuatPada)) + '</div><p class="small" style="margin:6px 0 0;white-space:pre-wrap">' + esc(m.Isi) + '</p>' +
+          (m.Balasan ? '<div class="alert mt-s">' + ic('reply') + '<div><h4 class="small">Balasan ' + (adm ? 'Admin' + (m.DibalasOleh ? ' (' + esc(m.DibalasOleh) + ')' : '') : 'guru') + ' · ' + esc(fmtWaktu(m.DibalasPada)) + '</h4><p class="small">' + esc(m.Balasan) + '</p></div></div>' : '') + '</div></div>'; }).join('') + '</div>' : '<div class="empty">Belum ada pesan.</div>') + '</div></div>';
     }
   };
   Act.kirimPesan = btn => {
     const f = document.getElementById('f-pesan'), d = bacaForm(f);
-    if (!d.NIS || !d.Subjek || !d.Isi) { toast('Lengkapi siswa, subjek, dan isi pesan.', 'warn'); return; }
+    if (d.Tujuan === 'ADMIN') { if (!d.Subjek || !d.Isi) { toast('Lengkapi subjek dan isi pesan.', 'warn'); return; } }
+    else if (!d.NIS || !d.Subjek || !d.Isi) { toast('Lengkapi siswa, subjek, dan isi pesan.', 'warn'); return; }
     simpan(btn, 'pesan.kirim', d);
   };
+  /** Usulan pekerjaan spesifik baru → pesan ke Admin (Admin bisa langsung menambahkannya ke daftar) */
+  Act.usulPekerjaan = () => formModal({ title: 'Usulkan Pekerjaan Spesifik Baru', icon: 'engineering', action: 'pesan.kirim', size: 'lg',
+    intro: '<p class="small muted" style="margin-top:0">Usulan dikirim ke Admin / Koordinator PKL. Setelah Admin menambahkannya, pekerjaan ini bisa Anda pilih di menu Pekerjaan Siswa.</p>',
+    fields: [{ name: 'nama', label: 'Nama pekerjaan', req: true, full: true, ph: 'Contoh: Instalasi CCTV IP' },
+      { name: 'sub', label: 'Sub pekerjaan (satu per baris)', type: 'textarea', rows: 5, req: true, full: true, ph: 'Pemasangan kamera & kabel\nKonfigurasi NVR\nAkses jarak jauh' },
+      { name: 'NIS', label: 'Siswa yang mengerjakan (opsional)', type: 'select', full: true, ph: '— Tidak diisi —', options: siswaSaya().map(s => ({ v: s.NIS, l: s.Nama })) },
+      { name: 'ket', label: 'Keterangan tambahan (opsional)', type: 'textarea', rows: 2, full: true }],
+    olah: d => {
+      const subs = String(d.sub || '').split('\n').map(x => x.replace(/^[-•*\d.\s]+/, '').trim()).filter(Boolean);
+      if (!subs.length) { toast('Isi minimal satu sub pekerjaan.', 'warn'); return null; }
+      return { Tujuan: 'ADMIN', Kategori: 'Usulan pekerjaan spesifik', NIS: d.NIS || '', Subjek: 'Usulan pekerjaan: ' + d.nama.trim(),
+        Isi: 'Sub pekerjaan:\n' + subs.map(x => '- ' + x).join('\n') + (d.ket ? '\n\nKeterangan:\n' + d.ket : '') };
+    } });
 })();

@@ -1,7 +1,7 @@
 # Panduan Instalasi SIGAPKL-TKJ
 
 Sistem Informasi Giat Aktivitas Praktik Kerja Lapangan — Kelas XII TKJ
-Versi 1.1.0 · Backend: Google Apps Script (REST API) · Frontend: GitHub Pages
+Versi 1.4.0 · Backend: Google Apps Script (REST API) · Frontend: GitHub Pages
 
 Panduan ini ditulis untuk Anda yang belum pernah memakai Apps Script maupun GitHub. Ikuti urutannya dari atas ke bawah. Total waktu sekitar 45–60 menit.
 
@@ -62,9 +62,10 @@ Pustaka ini membuat QR tanda tangan elektronik di server, terutama untuk **gener
 1. Buka di browser: `https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js`
 2. Ctrl+A → Ctrl+C.
 3. Di editor, buka `DE_QrLib` → hapus semua isi → Ctrl+V → Simpan.
-4. Pilih fungsi **`ujiQr`** di dropdown atas → klik **Jalankan**. Log harus menampilkan `QR OK`.
+4. Buka berkas **`DocEngine`**, lalu di dropdown fungsi (di sebelah tombol Jalankan) pilih **`ujiQr`** → klik **Jalankan**. Log harus menampilkan `✅ QR OK`.
 
-> Bila langkah ini dilewati, `ujiQr` akan hilang bersama isi lama (wajar). QR tetap dibuat di browser ketika Admin/pejabat menekan **Terbitkan**, hanya generate massal yang tidak menyisipkan QR.
+> Fungsi `ujiQr` ada di berkas `DocEngine`, bukan di `DE_QrLib`. Dropdown fungsi hanya menampilkan fungsi dari berkas yang sedang dibuka.
+> Bila langkah ini dilewati, QR tetap dibuat di browser ketika Admin/pejabat menekan **Terbitkan**; hanya generate massal yang tidak menyisipkan QR.
 
 ### A5. Jalankan setup otomatis
 
@@ -308,6 +309,45 @@ Menu **Pengaturan → Tema & Suasana Aplikasi** (khusus Admin):
 Warna peringatan (Alfa, nilai terkunci, gagal) sengaja tidak ikut berubah agar maknanya tetap jelas. Untuk warna sendiri, aplikasi memeriksa apakah teks putih masih terbaca dan menyediakan tombol **Gelapkan agar mudah dibaca**.
 
 Untuk aplikasi yang sudah terpasang sebelumnya: perbarui `Kode.gs` dan `PKL.gs`, buat **Versi baru** di Kelola deployment, lalu unggah ulang frontend. Pengaturan tema dibuat otomatis saat pertama kali disimpan; tidak perlu menjalankan setup ulang.
+
+### E6. Pekerjaan spesifik & sub pekerjaan
+
+Pembagian tugas:
+
+| Siapa | Apa yang dilakukan | Di menu |
+|---|---|---|
+| **Admin** | Menyusun daftar pekerjaan spesifik beserta **sub pekerjaan**, bobot, dan lembar observasi tempat sub itu dinilai (Obs 1 / Obs 2) | **Pekerjaan & Sub** |
+| **Instruktur** | Memilih pekerjaan (boleh lebih dari satu) dan sub pekerjaan yang benar-benar dikerjakan tiap siswa | **Pekerjaan Siswa**, atau tombol **Pilih pekerjaan** di halaman Observasi |
+| **Admin** (pemantau) | Melihat dan mengoreksi pilihan instruktur bila perlu | **Penempatan Siswa** → tombol ikon pekerjaan |
+
+- Sub pekerjaan yang dicentang instruktur langsung menjadi **aspek penilaian** Lembar Observasi 1 & 2.
+- Siswa yang belum dipilihkan pekerjaan, atau pekerjaan yang belum punya sub, dinilai dengan **Indikator Umum** (bisa diubah di kartu paling bawah menu Pekerjaan & Sub).
+- Mengganti nama pekerjaan atau sub ikut memperbarui pilihan siswa yang sudah ada. Menghapus pekerjaan tidak menghapus nilai yang sudah tersimpan.
+- Setelah nilai siswa **ditutup** Admin, pekerjaannya tidak bisa diubah lagi.
+
+Untuk aplikasi yang sudah terpasang: perbarui `Kode.gs` dan `PKL.gs`, buat **Versi baru**, lalu unggah ulang frontend. Kolom baru di sheet Penempatan dibuat otomatis saat pertama kali dipakai.
+
+### E7. Pesan ke Admin (usulan pekerjaan baru)
+
+- Instruktur membuka **Pesan Darurat → Ke Admin / Koordinator**, lalu memilih kategori: *Usulan pekerjaan spesifik*, *Kendala aplikasi / akun*, *Data siswa / penempatan*, atau *Lainnya*.
+- Untuk pekerjaan yang belum ada di daftar, instruktur memakai tombol **Usulkan pekerjaan baru** (di menu Pekerjaan Siswa atau di jendela pilih pekerjaan), lalu mengisi nama pekerjaan dan sub pekerjaannya.
+- Admin melihat pesan di **Pesan Darurat → Untuk Admin** (ada angka penanda pesan baru). Admin bisa membalas, menandai selesai, dan untuk usulan cukup menekan **Tambahkan ke Pekerjaan & Sub**: nama dan sub pekerjaan sudah terisi, tinggal atur bobot lalu simpan.
+- Balasan Admin tampil di akun instruktur.
+
+### E8. Kuisioner akhir PKL
+
+1. Admin membuka menu **Kuisioner** (bagian Monitoring PKL).
+2. Mulai dari templat siap pakai, lalu sesuaikan pertanyaannya:
+   - **Templat penilaian siswa**: Instruktur menilai tiap siswa pada bagian *Kompetensi*, *Sikap*, *Disiplin*, ditambah rekomendasi dan catatan.
+   - **Templat kepuasan aplikasi**: Siswa, Guru, dan Instruktur menilai aplikasi SIGAPKL-TKJ.
+   Atau buat sendiri dengan **Buat Kuisioner**. Jenis jawaban: skala 1–5, pilihan ganda, atau isian bebas.
+3. Kuisioner baru berstatus **Draf** dan belum terlihat siapa pun. Di akhir periode PKL, tekan **Buka untuk responden**. Menu **Kuisioner** dan pengingat di dashboard langsung muncul di akun responden. Tanggal mulai dan batas pengisian bisa diatur agar tampil otomatis.
+4. Pantau jumlah jawaban di kartu kuisioner, lalu tekan **Hasil** untuk melihat rata-rata per bagian, per siswa, sebaran jawaban per pertanyaan, dan semua masukan tertulis. Tekan **Ekspor Excel** untuk mengunduh semua jawaban.
+5. Tekan **Tutup** bila sudah selesai. Hasil tetap tersimpan.
+
+Hasil kuisioner **tidak memengaruhi nilai PKL** siswa; fungsinya sebagai umpan balik dan bahan evaluasi.
+
+Untuk aplikasi yang sudah terpasang: perbarui `Kode.gs` dan `PKL.gs`, buat **Versi baru**, lalu unggah ulang frontend (ada berkas baru `js/pages-kuisioner.js`). Sheet `Kuisioner` dan `JawabanKuisioner` dibuat otomatis saat kuisioner pertama disimpan.
 
 ---
 

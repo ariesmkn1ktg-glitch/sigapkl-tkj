@@ -4,6 +4,6 @@
  *  URL ini bukan rahasia; keamanan dijaga token sesi + cek peran di server.
  * ===================================================================== */
 window.APP_CONFIG = {
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbzKfnl4_-r4_S36cPBNHVsgi9ybtliKMpwj_yqH44G-wv16N3IwQRE9vRe-K63XgkrF/exec',
-  VERSI: '1.1.0'
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbwTBF66lAcUmqSzfEcXN_AM0wMElUayEoLgwO3BE-U3IH_8Tq1CmU3aqxio_xNnAYVw/exec',
+  VERSI: '1.4.0'
 };

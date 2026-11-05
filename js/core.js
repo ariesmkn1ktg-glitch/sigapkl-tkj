@@ -149,12 +149,34 @@
       lengkap: Object.keys(JENIS).filter(j => nilai[j] !== undefined).length, kunci: !!S.ix.kunci[nis + '|' + p],
       prg: (S.ix.prg[nis] || []).filter(x => String(x.Periode) === p && x.Status !== 'Dicabut') };
   }
-  function instrumen(jenis, pekerjaan) {
+  function subPekerjaan(v) { if (!v) return {}; if (typeof v === 'object') return v; try { const o = JSON.parse(v); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; } }
+  function instrumen(jenis, pekerjaan, sub) {
     const all = S.data.instrumen.filter(i => i.Jenis === jenis);
     if (jenis !== 'OBS1' && jenis !== 'OBS2') return all.sort((a, b) => a.No - b.No);
-    let r = all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === String(pekerjaan || '').toLowerCase());
-    if (!r.length) r = all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === 'umum');
-    return r.sort((a, b) => a.No - b.No);
+    const sudah = {}, r = [], pilih = {}, so = subPekerjaan(sub);
+    Object.keys(so).forEach(k => (pilih[k.toLowerCase()] = (so[k] || []).map(x => String(x).toLowerCase())));
+    const umum = () => all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === 'umum');
+    daftarPekerjaan(pekerjaan).forEach(pk => { let it = all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === pk.toLowerCase()); const sp = pilih[pk.toLowerCase()];
+      if (it.length && sp && sp.length) { const f = it.filter(i => sp.indexOf(String(i.Aspek).toLowerCase()) > -1); if (f.length) it = f; }
+      return (it.length ? it : umum()).sort((a, b) => a.No - b.No)
+      .forEach(i => { const k = String(i.Aspek || '').toLowerCase(); if (!sudah[k]) { sudah[k] = 1; r.push(i); } }); });
+    return r.length ? r : all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === 'umum').sort((a, b) => a.No - b.No);
+  }
+  /** Pekerjaan spesifik bisa lebih dari satu, disimpan "A; B" */
+  function daftarPekerjaan(s) { const lihat = {}; return String(s || '').split(/[;\n]/).map(x => x.trim()).filter(x => x && !lihat[x.toLowerCase()] && (lihat[x.toLowerCase()] = 1)); }
+  const teksPekerjaan = (s, pemisah) => daftarPekerjaan(s).join(pemisah || ', ');
+  /** Katalog pekerjaan (diisi Admin): daftar Pengaturan + nama yang punya sub pekerjaan (aspek OBS) */
+  function katalogPekerjaan() {
+    const d = daftarPekerjaan(P('PEKERJAAN_SPESIFIK')), kecil = d.map(x => x.toLowerCase());
+    (S.data.instrumen || []).forEach(i => { const n = i.PekerjaanSpesifik; if ((i.Jenis === 'OBS1' || i.Jenis === 'OBS2') && n && n.toLowerCase() !== 'umum' && kecil.indexOf(n.toLowerCase()) < 0) { d.push(n); kecil.push(n.toLowerCase()); } });
+    return d;
+  }
+  /** Sub pekerjaan sebuah pekerjaan = aspek OBS1 ∪ OBS2 (unik per nama) */
+  function subDari(pk) {
+    const m = {}; (S.data.instrumen || []).filter(i => (i.Jenis === 'OBS1' || i.Jenis === 'OBS2') && (i.PekerjaanSpesifik || '').toLowerCase() === String(pk).toLowerCase())
+      .sort((a, b) => (a.Jenis + String(a.No).padStart(3, '0')).localeCompare(b.Jenis + String(b.No).padStart(3, '0')))
+      .forEach(i => { const k = String(i.Aspek).toLowerCase(); (m[k] = m[k] || { Aspek: i.Aspek, Deskripsi: i.Deskripsi, obs: [], id: {}, Bobot: i.Bobot }).obs.push(i.Jenis); m[k].id[i.Jenis] = i.InstrumenID; });
+    return Object.values(m);
   }
 
   /* ---------------- Helper tampilan ---------------- */
@@ -243,6 +265,7 @@
 
   /* ---------------- Builder form ---------------- */
   function fld(f) {
+    if (f.type === 'html') return '<div class="field' + (f.full ? ' full' : '') + '"><label>' + esc(f.label) + '</label>' + f.html + (f.help ? '<div class="help">' + f.help + '</div>' : '') + '</div>';
     const id = 'f_' + f.name + '_' + Math.random().toString(36).slice(2, 6), v = f.value == null ? '' : f.value;
     let inp;
     if (f.type === 'select') inp = '<select class="input" id="' + id + '" name="' + f.name + '"' + (f.req ? ' required' : '') + '>' + (f.kosong !== false ? '<option value="">' + esc(f.ph || '— Pilih —') + '</option>' : '') +
@@ -380,16 +403,17 @@
   };
   /** Formulir penilaian berbasis instrumen (dipakai Guru & Instruktur) */
   K.formNilai = function (nis, periode, jenis, bolehUbah) {
-    const pen = penOf(nis, periode) || {}, items = instrumen(jenis, pen.PekerjaanSpesifik), ada = S.ix.nilai[nis + '|' + pen.Periode + '|' + jenis];
+    const pen = penOf(nis, periode) || {}, items = instrumen(jenis, pen.PekerjaanSpesifik, pen.SubPekerjaan), ada = S.ix.nilai[nis + '|' + pen.Periode + '|' + jenis];
     let skor = {}, cat = {}, rek = '', draf = false; if (ada) { try { const o = JSON.parse(ada.Skor); skor = o.skor || {}; cat = o.catatan || {}; rek = o.rekomendasi || ''; draf = o.draf; } catch (e) {} }
     const kunci = rekap(nis, pen.Periode).kunci, ro = !bolehUbah || kunci;
-    if (!items.length) return '<div class="alert warn">' + ic('info') + '<div><h4>Instrumen belum diatur</h4><p>Admin perlu mengatur instrumen ' + esc(JENIS[jenis]) + (pen.PekerjaanSpesifik ? ' untuk pekerjaan "' + esc(pen.PekerjaanSpesifik) + '"' : '') + '.</p></div></div>';
+    if (!items.length) return '<div class="alert warn">' + ic('info') + '<div><h4>Instrumen belum diatur</h4><p>Admin perlu mengatur instrumen ' + esc(JENIS[jenis]) + (pen.PekerjaanSpesifik ? ' untuk pekerjaan "' + esc(teksPekerjaan(pen.PekerjaanSpesifik)) + '"' : '') + '.</p></div></div>';
     const total = () => { let tb = 0, tn = 0; items.forEach(i => { tb += +i.Bobot || 1; tn += (+i.Bobot || 1) * (+skor[i.InstrumenID] || 0); }); return tb ? Math.round(tn / tb * 100) / 100 : 0; };
+    const tbAll = items.reduce((a, i) => a + (+i.Bobot || 1), 0), banyakPek = new Set(items.map(i => i.PekerjaanSpesifik)).size > 1;
     const kat = v => v >= 90 ? 'Amat Baik' : v >= 80 ? 'Baik' : v >= 70 ? 'Cukup' : v > 0 ? 'Kurang' : '—';
     const aspek = items.map((i, k) => {
       const v = skor[i.InstrumenID] === undefined ? '' : skor[i.InstrumenID];
       return '<div class="aspek"><div class="aspek-h"><span class="aspek-no">' + String(k + 1).padStart(2, '0') + '</span><div class="grow"><div class="b">' + esc(i.Aspek) + '</div><div class="small muted">' + esc(i.Deskripsi || '') + '</div>' +
-        '<div class="mt-s">' + pill('Bobot ' + i.Bobot + '%', 'info') + ' <span class="pill ok" data-kat="' + i.InstrumenID + '">' + kat(+v) + '</span></div></div>' +
+        '<div class="mt-s">' + pill('Bobot ' + Math.round((+i.Bobot || 1) / tbAll * 100) + '%', 'info') + (banyakPek ? ' ' + pill(i.PekerjaanSpesifik, 'mute') : '') + ' <span class="pill ok" data-kat="' + i.InstrumenID + '">' + kat(+v) + '</span></div></div>' +
         '<input class="input score-in" type="number" min="0" max="100" step="1" name="s_' + i.InstrumenID + '" value="' + esc(v) + '" data-inp="skor" data-id="' + i.InstrumenID + '"' + (ro ? ' disabled' : '') + ' aria-label="Skor ' + esc(i.Aspek) + '"></div>' +
         '<input type="range" min="0" max="100" value="' + (v === '' ? 0 : v) + '" data-inp="skor" data-id="' + i.InstrumenID + '"' + (ro ? ' disabled' : '') + ' aria-hidden="true" tabindex="-1" class="mt">' +
         '<div class="scale"><span>Kurang (&lt;70)</span><span>Cukup (70–79)</span><span>Baik (80–89)</span><span>Amat Baik (90–100)</span></div>' +
@@ -432,24 +456,25 @@
     SISWA: [
       { sec: 'Navigasi Siswa' }, { id: 'dashboard', t: 'Dashboard', i: 'space_dashboard' }, { id: 'penempatan', t: 'Penempatan & Jadwal', i: 'calendar_month' },
       { id: 'jurnal', t: 'Jurnal & Foto', i: 'photo_camera' }, { id: 'nilai', t: 'Nilai & Kehadiran', i: 'workspace_premium', badge: () => rekapSaya().prg.length, warna: 'rose' },
-      { id: 'kartu', t: 'Kartu PKL', i: 'badge' }, { sec: 'Bantuan' }, { id: 'dokumen', t: 'Dokumen Saya', i: 'description' }],
+      { id: 'kartu', t: 'Kartu PKL', i: 'badge' }, { sec: 'Bantuan' }, { id: 'dokumen', t: 'Dokumen Saya', i: 'description' }, { id: 'kuisioner', t: 'Kuisioner', i: 'quiz', jika: () => (S.data.kuisioner || []).length > 0, badge: () => K.kuisionerTertunda ? K.kuisionerTertunda() : 0, warna: 'amber' }],
     GURU: [
       { sec: 'Panel Guru Pembimbing' }, { id: 'dashboard', t: 'Dashboard', i: 'space_dashboard' }, { id: 'siswa', t: 'Siswa Bimbingan', i: 'groups' },
       { id: 'bimbingan', t: 'Jadwal Bimbingan', i: 'event_note' }, { id: 'penilaian', t: 'Penilaian', i: 'grading' },
       { sec: 'Supervisi & Bantuan' }, { id: 'peringatan', t: 'Peringatan Kehadiran', i: 'notification_important', badge: () => S.data.peringatan.filter(p => p.Status === 'Belum ditangani').length, warna: 'amber' },
-      { id: 'pesan', t: 'Pesan Darurat', i: 'emergency', badge: () => S.data.pesan.filter(p => p.Status === 'Baru').length }, { id: 'dokumen', t: 'Persetujuan Dokumen', i: 'draw' }],
+      { id: 'pesan', t: 'Pesan Darurat', i: 'emergency', badge: () => S.data.pesan.filter(p => p.Status === 'Baru').length }, { id: 'dokumen', t: 'Persetujuan Dokumen', i: 'draw' }, { id: 'kuisioner', t: 'Kuisioner', i: 'quiz', jika: () => (S.data.kuisioner || []).length > 0, badge: () => K.kuisionerTertunda ? K.kuisionerTertunda() : 0, warna: 'amber' }],
     INSTRUKTUR: [
       { sec: 'Aktivitas Lapangan' }, { id: 'dashboard', t: 'Dashboard', i: 'space_dashboard' }, { id: 'absensi', t: 'Presensi Mingguan', i: 'fact_check' },
+      { id: 'pekerjaan', t: 'Pekerjaan Siswa', i: 'engineering', badge: () => S.data.penempatan.filter(p => String(p.Periode) === periodeAktif() && !p.PekerjaanSpesifik).length, warna: 'amber' },
       { id: 'penilaian', t: 'Observasi & Penilaian', i: 'grading' }, { sec: 'Komunikasi & Bantuan' },
       { id: 'peringatan', t: 'Data Izin/Alfa', i: 'notification_important', badge: () => S.data.peringatan.filter(p => p.Status === 'Belum ditangani').length, warna: 'amber' },
-      { id: 'pesan', t: 'Pesan Darurat', i: 'emergency' }],
+      { id: 'pesan', t: 'Pesan Darurat', i: 'emergency' }, { id: 'kuisioner', t: 'Kuisioner', i: 'quiz', jika: () => (S.data.kuisioner || []).length > 0, badge: () => K.kuisionerTertunda ? K.kuisionerTertunda() : 0, warna: 'amber' }],
     ADMIN: [
       { sec: 'Ringkasan' }, { id: 'dashboard', t: 'Dashboard', i: 'space_dashboard' },
       { sec: 'Data Master' }, { id: 'dudi', t: 'Data DUDI', i: 'apartment' }, { id: 'induk', t: 'Siswa · Guru · Instruktur', i: 'groups' }, { id: 'penempatan', t: 'Penempatan Siswa', i: 'hub' }, { id: 'akun', t: 'Akun Pengguna', i: 'manage_accounts' },
       { sec: 'Monitoring PKL' }, { id: 'absensi', t: 'Absensi', i: 'fact_check' }, { id: 'peringatan', t: 'Peringatan Izin/Alfa', i: 'notification_important', badge: () => S.data.peringatan.filter(p => p.Status === 'Belum ditangani').length, warna: 'amber' },
-      { id: 'presentasi', t: 'Jadwal Presentasi', i: 'co_present' }, { id: 'nilai', t: 'Nilai & Penutupan', i: 'lock' }, { id: 'pesan', t: 'Pesan Darurat', i: 'emergency' }, { id: 'rekap', t: 'Rekap & Laporan', i: 'monitoring' },
+      { id: 'presentasi', t: 'Jadwal Presentasi', i: 'co_present' }, { id: 'nilai', t: 'Nilai & Penutupan', i: 'lock' }, { id: 'pesan', t: 'Pesan Darurat', i: 'emergency', badge: () => S.data.pesan.filter(p => p.Tujuan === 'ADMIN' && p.Status === 'Baru').length }, { id: 'rekap', t: 'Rekap & Laporan', i: 'monitoring' }, { id: 'kuisioner', t: 'Kuisioner', i: 'quiz' },
       { sec: 'Dokumen & Komunikasi' }, { id: 'kartu', t: 'Cetak Kartu PKL', i: 'badge' }, { id: 'dokumen', t: 'Doc Engine', i: 'description' }, { id: 'notifikasi', t: 'WhatsApp & Notifikasi', i: 'forum' }, { id: 'crm', t: 'CRM Kontak', i: 'contacts' },
-      { sec: 'Sistem' }, { id: 'migrasi', t: 'Import & Migrasi', i: 'sync_alt' }, { id: 'instrumen', t: 'Instrumen Penilaian', i: 'checklist' }, { id: 'pengaturan', t: 'Pengaturan', i: 'settings' }, { id: 'log', t: 'Log Aktivitas', i: 'history' }]
+      { sec: 'Sistem' }, { id: 'migrasi', t: 'Import & Migrasi', i: 'sync_alt' }, { id: 'pekerjaan', t: 'Pekerjaan & Sub', i: 'engineering' }, { id: 'instrumen', t: 'Instrumen Penilaian', i: 'checklist' }, { id: 'pengaturan', t: 'Pengaturan', i: 'settings' }, { id: 'log', t: 'Log Aktivitas', i: 'history' }]
   };
   function rekapSaya() { return Sesi.me && Sesi.peran === 'SISWA' && S.data ? rekap(Sesi.me.ref) : { prg: [] }; }
   const PUBLIK = ['login', 'lupa', 'darurat', 'v'];
@@ -480,7 +505,7 @@
       if (!Sesi.token) { if (['login', 'lupa', 'darurat'].indexOf(page) < 0) { location.replace('#/login'); return; } App.cur = page; root.innerHTML = Pages[page].render(param); Pages[page].after && Pages[page].after(param); return; }
       if (Sesi.me.wajibGanti || page === 'ganti') { App.cur = 'ganti'; root.innerHTML = Pages.ganti.render(); Pages.ganti.after && Pages.ganti.after(); return; }
       if (!S.data) { root.innerHTML = '<div class="auth"><div class="center"><span class="spin dark" style="width:36px;height:36px"></span><p class="muted mt">Menyiapkan data…</p><button class="btn ghost sm mt" data-act="logout">Keluar</button></div></div>'; return; }
-      const menu = MENU[Sesi.peran] || [], ids = menu.filter(m => m.id).map(m => m.id);
+      const menu = (MENU[Sesi.peran] || []).filter(m => !m.jika || m.jika()), ids = menu.filter(m => m.id).map(m => m.id);
       let id = ids.indexOf(page) > -1 ? page : 'dashboard';
       if (page !== id) { history.replaceState(null, '', '#/' + id); }
       const key = Sesi.peran + ':' + id, pg = Pages[key] || Pages[id];
@@ -515,7 +540,7 @@
       '<div class="me">' + (roles.length > 1 ? '<select class="role-sel" data-chg="peran" aria-label="Ganti peran">' + roles.map(r => '<option value="' + r + '"' + (r === Sesi.peran ? ' selected' : '') + '>' + (r === 'ADMIN' ? 'Admin' : r === 'GURU' ? 'Guru Pembimbing' : r) + '</option>').join('') + '</select>' : '') +
       '<button class="icon-btn" data-act="notifPanel" aria-label="Notifikasi">' + ic('notifications') + (nNotif ? '<span class="dot"></span>' : '') + '</button>' +
       '<div class="me-txt"><div class="n">' + esc(me.nama) + '</div><div class="s">' + esc(peranLabel) + '</div></div><button class="icon-btn" style="border-radius:50%;padding:0;border:0" data-act="akunSaya" aria-label="Akun saya">' + av(me.nama, Sesi.peran === 'SISWA' ? (S.ix.siswa[me.ref] || {}).FotoURL : '', '') + '</button></div></header>' +
-      '<main class="content" id="content">' + (aktif === 'dashboard' ? Tema.banner() : '') + isi + '</main></div></div><nav class="bottom-nav">' + bot + '</nav>';
+      '<main class="content" id="content">' + (aktif === 'dashboard' ? Tema.banner() + (K.bannerKuisioner ? K.bannerKuisioner() : '') : '') + isi + '</main></div></div><nav class="bottom-nav">' + bot + '</nav>';
   }
   function halamanKonfigurasi() {
     return '<div class="auth"><div class="auth-card"><div class="auth-logo">' + ic('settings', 'fill') + '</div><h1>Konfigurasi belum lengkap</h1><p class="tagline">Frontend belum terhubung ke backend Apps Script.</p>' +
@@ -718,8 +743,46 @@
   };
   Act.tutupUcapan = el => { LS.set(el.dataset.k, 1); const b = el.closest('.tema-ucapan'); if (b) b.remove(); };
 
+  /* ---------------- Pilih pekerjaan spesifik + sub (Instruktur / Admin) ---------------- */
+  K.ringkasPekerjaan = function (pen) {
+    const list = daftarPekerjaan(pen && pen.PekerjaanSpesifik), sub = subPekerjaan(pen && pen.SubPekerjaan);
+    if (!list.length) return '<span class="pill warn dot">Belum dipilih</span>';
+    return list.map(pk => { const n = (sub[pk] || []).length, tot = subDari(pk).length; return '<span class="tag">' + esc(pk) + (tot ? ' <span class="muted">· ' + (n && n < tot ? n + '/' + tot : tot) + ' sub</span>' : ' <span class="muted">· indikator Umum</span>') + '</span>'; }).join(' ');
+  };
+  Act.aturPekerjaan = el => {
+    const nis = el.dataset.nis, pen = penOf(nis, el.dataset.periode) || {}, s = S.ix.siswa[nis] || {}, kat = katalogPekerjaan();
+    const dipilih = daftarPekerjaan(pen.PekerjaanSpesifik).map(x => x.toLowerCase()), sub = subPekerjaan(pen.SubPekerjaan), subK = {};
+    Object.keys(sub).forEach(k => (subK[k.toLowerCase()] = (sub[k] || []).map(x => String(x).toLowerCase())));
+    const adaNilai = ['OBS1', 'OBS2'].some(j => S.ix.nilai[nis + '|' + pen.Periode + '|' + j]);
+    if (rekap(nis, pen.Periode).kunci) { toast('Nilai siswa ini sudah ditutup Admin; pekerjaan tidak dapat diubah.', 'warn'); return; }
+    const kartu = kat.map((pk, i) => {
+      const on = dipilih.indexOf(pk.toLowerCase()) > -1, subs = subDari(pk), sp = subK[pk.toLowerCase()];
+      return '<div class="pk-card' + (on ? ' on' : '') + '" data-pk="' + esc(pk) + '"><label class="pk-h"><input type="checkbox" class="pk-cek" data-chg="pkCek"' + (on ? ' checked' : '') + '><span class="grow"><b>' + esc(pk) + '</b><span class="xs muted">' + (subs.length ? subs.length + ' sub pekerjaan' : 'Belum ada sub — dinilai dengan indikator Umum') + '</span></span></label>' +
+        (subs.length ? '<div class="pk-sub">' + subs.map(x => '<label><input type="checkbox" class="sub-cek" value="' + esc(x.Aspek) + '"' + (!on || !sp || !sp.length || sp.indexOf(String(x.Aspek).toLowerCase()) > -1 ? ' checked' : '') + '><span class="grow">' + esc(x.Aspek) + (x.Deskripsi ? '<span class="xs muted">' + esc(x.Deskripsi) + '</span>' : '') + '</span>' +
+          x.obs.map(o => '<span class="pill mute">' + (o === 'OBS1' ? 'Obs 1' : 'Obs 2') + '</span>').join('') + '</label>').join('') + '</div>' : '') + '</div>';
+    }).join('');
+    const m = modal({ title: 'Pekerjaan Spesifik · ' + (s.Nama || nis), icon: 'engineering', size: 'lg',
+      body: '<p class="small muted" style="margin-top:0">Centang pekerjaan yang dikerjakan siswa di ' + esc(nmDudi(pen.DUDIID)) + ', lalu pilih sub pekerjaannya. Sub yang dicentang menjadi aspek yang dinilai di Lembar Observasi.</p>' +
+        (adaNilai ? '<div class="alert warn mb">' + ic('info') + '<div><p class="small">Lembar Observasi siswa ini sudah pernah dinilai. Jika pekerjaan/sub diubah, buka lagi Lembar Observasi dan simpan ulang agar nilainya mengikuti aspek baru.</p></div></div>' : '') +
+        (kat.length ? '<div class="pk-list" id="pk-list">' + kartu + '</div>' : '<div class="empty">' + ic('engineering') + 'Admin belum mengisi daftar pekerjaan spesifik.</div>') +
+        (pen.PekerjaanDiaturOleh ? '<p class="xs muted mt">Terakhir diatur: ' + esc(pen.PekerjaanDiaturOleh) + '</p>' : '') +
+        (Sesi.peran === 'INSTRUKTUR' ? '<p class="small mt">Pekerjaan yang dikerjakan siswa tidak ada di daftar? <a href="#" data-act="usulPekerjaan">Usulkan ke Admin</a>.</p>' : ''),
+      foot: '<button class="btn ghost" data-x>Batal</button><button class="btn" data-ok>' + ic('save') + 'Simpan Pekerjaan</button>' });
+    m.el.querySelector('[data-ok]').onclick = async e => {
+      const kartuOn = [...m.el.querySelectorAll('.pk-card')].filter(c => c.querySelector('.pk-cek').checked);
+      if (!kartuOn.length) { toast('Centang minimal satu pekerjaan.', 'warn'); return; }
+      const Pekerjaan = [], Sub = {};
+      for (const c of kartuOn) {
+        const pk = c.dataset.pk, cek = [...c.querySelectorAll('.sub-cek')]; Pekerjaan.push(pk);
+        if (cek.length) { const v = cek.filter(x => x.checked).map(x => x.value); if (!v.length) { toast('"' + pk + '": centang minimal satu sub pekerjaan.', 'warn'); return; } Sub[pk] = v.length === cek.length ? [] : v; }
+      }
+      await simpan(e.currentTarget, 'pekerjaan.atur', { NIS: nis, Periode: pen.Periode, Pekerjaan, Sub }, { tutup: m.close });
+    };
+  };
+  Act.pkCek = el => { const c = el.closest('.pk-card'); c.classList.toggle('on', el.checked); if (el.checked) c.querySelectorAll('.sub-cek').forEach(x => (x.checked = true)); };
+
   /* ---------------- Ekspor global ---------------- */
   Object.assign(window, { App, Sesi, S, api, Pages, Act, Forms, Inp, K, P, esc, ic, av, pill, pillStatus, toast, modal, konfirmasi, busy, simpan, fld, bacaForm, formModal, barChart, donut, rekap, penOf,
     periodeAktif, instrumen, JENIS, predikat, predikatTeks, bobot, fmtTgl, fmtTglL, fmtWaktu, isoTgl, tambahHari, hariIni, tglObj, HARI, BLN, inisial, driveImg, driveId, nmSiswa, nmGuru, nmIns, nmDudi, num, cari,
-    eksporXlsx, bacaBerkasTabel, qrDataUrl, isiQr, cetak, warmUp, LS, urlSiap, Tema });
+    eksporXlsx, bacaBerkasTabel, qrDataUrl, isiQr, cetak, warmUp, LS, urlSiap, Tema, daftarPekerjaan, teksPekerjaan, katalogPekerjaan, subDari, subPekerjaan });
 })();
