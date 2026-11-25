@@ -1,7 +1,7 @@
 # Panduan Instalasi SIGAPKL-TKJ
 
 Sistem Informasi Giat Aktivitas Praktik Kerja Lapangan — Kelas XII TKJ
-Versi 1.1.0 · Backend: Google Apps Script (REST API) · Frontend: GitHub Pages
+Versi 1.5.1 · Backend: Google Apps Script (REST API) · Frontend: GitHub Pages
 
 Panduan ini ditulis untuk Anda yang belum pernah memakai Apps Script maupun GitHub. Ikuti urutannya dari atas ke bawah. Total waktu sekitar 45–60 menit.
 
@@ -62,9 +62,10 @@ Pustaka ini membuat QR tanda tangan elektronik di server, terutama untuk **gener
 1. Buka di browser: `https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js`
 2. Ctrl+A → Ctrl+C.
 3. Di editor, buka `DE_QrLib` → hapus semua isi → Ctrl+V → Simpan.
-4. Pilih fungsi **`ujiQr`** di dropdown atas → klik **Jalankan**. Log harus menampilkan `QR OK`.
+4. Buka berkas **`DocEngine`**, lalu di dropdown fungsi (di sebelah tombol Jalankan) pilih **`ujiQr`** → klik **Jalankan**. Log harus menampilkan `✅ QR OK`.
 
-> Bila langkah ini dilewati, `ujiQr` akan hilang bersama isi lama (wajar). QR tetap dibuat di browser ketika Admin/pejabat menekan **Terbitkan**, hanya generate massal yang tidak menyisipkan QR.
+> Fungsi `ujiQr` ada di berkas `DocEngine`, bukan di `DE_QrLib`. Dropdown fungsi hanya menampilkan fungsi dari berkas yang sedang dibuka.
+> Bila langkah ini dilewati, QR tetap dibuat di browser ketika Admin/pejabat menekan **Terbitkan**; hanya generate massal yang tidak menyisipkan QR.
 
 ### A5. Jalankan setup otomatis
 
@@ -309,7 +310,122 @@ Warna peringatan (Alfa, nilai terkunci, gagal) sengaja tidak ikut berubah agar m
 
 Untuk aplikasi yang sudah terpasang sebelumnya: perbarui `Kode.gs` dan `PKL.gs`, buat **Versi baru** di Kelola deployment, lalu unggah ulang frontend. Pengaturan tema dibuat otomatis saat pertama kali disimpan; tidak perlu menjalankan setup ulang.
 
+### E6. Pekerjaan spesifik & sub pekerjaan
+
+Pembagian tugas:
+
+| Siapa | Apa yang dilakukan | Di menu |
+|---|---|---|
+| **Admin** | Menyusun daftar pekerjaan spesifik beserta **sub pekerjaan**, bobot, dan lembar observasi tempat sub itu dinilai (Obs 1 / Obs 2) | **Pekerjaan & Sub** |
+| **Instruktur** | Memilih pekerjaan (boleh lebih dari satu) dan sub pekerjaan yang benar-benar dikerjakan tiap siswa | **Pekerjaan Siswa**, atau tombol **Pilih pekerjaan** di halaman Observasi |
+| **Admin** (pemantau) | Melihat dan mengoreksi pilihan instruktur bila perlu | **Penempatan Siswa** → tombol ikon pekerjaan |
+
+- Sub pekerjaan yang dicentang instruktur langsung menjadi **aspek penilaian** Lembar Observasi 1 & 2.
+- Siswa yang belum dipilihkan pekerjaan, atau pekerjaan yang belum punya sub, dinilai dengan **Indikator Umum** (bisa diubah di kartu paling bawah menu Pekerjaan & Sub).
+- Mengganti nama pekerjaan atau sub ikut memperbarui pilihan siswa yang sudah ada. Menghapus pekerjaan tidak menghapus nilai yang sudah tersimpan.
+- Setelah nilai siswa **ditutup** Admin, pekerjaannya tidak bisa diubah lagi.
+
+Untuk aplikasi yang sudah terpasang: perbarui `Kode.gs` dan `PKL.gs`, buat **Versi baru**, lalu unggah ulang frontend. Kolom baru di sheet Penempatan dibuat otomatis saat pertama kali dipakai.
+
+### E7. Pesan ke Admin (usulan pekerjaan baru)
+
+- Instruktur membuka **Pesan Darurat → Ke Admin / Koordinator**, lalu memilih kategori: *Usulan pekerjaan spesifik*, *Kendala aplikasi / akun*, *Data siswa / penempatan*, atau *Lainnya*.
+- Untuk pekerjaan yang belum ada di daftar, instruktur memakai tombol **Usulkan pekerjaan baru** (di menu Pekerjaan Siswa atau di jendela pilih pekerjaan), lalu mengisi nama pekerjaan dan sub pekerjaannya.
+- Admin melihat pesan di **Pesan Darurat → Untuk Admin** (ada angka penanda pesan baru). Admin bisa membalas, menandai selesai, dan untuk usulan cukup menekan **Tambahkan ke Pekerjaan & Sub**: nama dan sub pekerjaan sudah terisi, tinggal atur bobot lalu simpan.
+- Balasan Admin tampil di akun instruktur.
+
+### E8. Kuisioner akhir PKL
+
+1. Admin membuka menu **Kuisioner** (bagian Monitoring PKL).
+2. Mulai dari templat siap pakai, lalu sesuaikan pertanyaannya:
+   - **Templat penilaian siswa**: Instruktur menilai tiap siswa pada bagian *Kompetensi*, *Sikap*, *Disiplin*, ditambah rekomendasi dan catatan.
+   - **Templat kepuasan aplikasi**: Siswa, Guru, dan Instruktur menilai aplikasi SIGAPKL-TKJ.
+   Atau buat sendiri dengan **Buat Kuisioner**. Jenis jawaban: skala 1–5, pilihan ganda, atau isian bebas.
+3. Kuisioner baru berstatus **Draf** dan belum terlihat siapa pun. Di akhir periode PKL, tekan **Buka untuk responden**. Menu **Kuisioner** dan pengingat di dashboard langsung muncul di akun responden. Tanggal mulai dan batas pengisian bisa diatur agar tampil otomatis.
+4. Pantau jumlah jawaban di kartu kuisioner, lalu tekan **Hasil** untuk melihat rata-rata per bagian, per siswa, sebaran jawaban per pertanyaan, dan semua masukan tertulis. Tekan **Ekspor Excel** untuk mengunduh semua jawaban.
+5. Tekan **Tutup** bila sudah selesai. Hasil tetap tersimpan.
+
+Hasil kuisioner **tidak memengaruhi nilai PKL** siswa; fungsinya sebagai umpan balik dan bahan evaluasi.
+
+Untuk aplikasi yang sudah terpasang: perbarui `Kode.gs` dan `PKL.gs`, buat **Versi baru**, lalu unggah ulang frontend (ada berkas baru `js/pages-kuisioner.js`). Sheet `Kuisioner` dan `JawabanKuisioner` dibuat otomatis saat kuisioner pertama disimpan.
+
+### E9. Nilai Rapor (Rekapitulasi Nilai Raport)
+
+| Siapa | Hak |
+|---|---|
+| **Admin** | Mengubah semua nilai dan informasi (identitas, ketidakhadiran, peringkat, wali kelas, catatan), impor dari Excel, mengatur izin, struktur mata pelajaran, dan mencetak |
+| **Siswa** | Melihat rapornya sendiri dan mencetak; **mengisi / mengubah nilai hanya bila diizinkan Admin** |
+| **Guru Pembimbing** | Melihat rapor siswa bimbingannya (hanya lihat) |
+
+Langkah awal untuk Admin:
+0. Belum punya berkas? Tekan **Unduh templat** (di jendela Impor Excel atau di bilah tombol daftar rapor). Templat berisi daftar siswa dan nilai yang sudah tersimpan, dengan judul kolom yang dikenali aplikasi. Isi atau perbaiki, simpan, lalu unggah kembali.
+1. Buka menu **Nilai Rapor** → **Impor Excel**, pilih berkas rekap nilai sekolah (format satu baris per siswa: NIS, NISN, Nama Siswa, Tempat Tanggal Lahir, kolom mata pelajaran per semester, Semester I/S/A, Wali Kelas, Rangking). Aplikasi menampilkan pratinjau: jumlah siswa terbaca, mata pelajaran yang dikenali, dan kolom yang dilewati. Tekan **Impor**.
+2. Kolom jumlah dan rata-rata tidak diimpor; aplikasi menghitung ulang dengan cara yang sama seperti berkas sekolah.
+3. Siswa yang belum terdaftar di aplikasi tetap disimpan, dan rapornya terlihat setelah siswa itu didaftarkan dengan NIS yang sama.
+4. **Pengaturan** (di halaman Nilai Rapor): tampilkan/sembunyikan dari siswa & guru, izin pengisian untuk semua siswa atau per siswa, batas waktu pengisian, pembulatan rata-rata, kota & tanggal tanda tangan, program dan konsentrasi keahlian.
+5. **Mata pelajaran**: ubah nama, nomor, dan semester tiap mata pelajaran; tambah sub mata pelajaran (mis. Muatan Lokal 1.7.1, 1.7.2) atau mata pelajaran pilihan baru.
+
+Izin siswa mengisi:
+- Centang siswa di daftar → **Izinkan mengisi** (atau izinkan semua siswa lewat Pengaturan).
+- Nilai yang diubah siswa berstatus **Menunggu verifikasi**. Buka rapor siswa itu: sel yang berubah ditandai kuning (arahkan kursor untuk melihat nilai lama). Tekan **Verifikasi** untuk menerima, atau **Tolak** untuk mengembalikan nilai sebelumnya.
+- Tekan **Cabut izin** setelah masa pengisian selesai.
+
+Lain-lain: **Isi nilai PKL** menyalin nilai akhir PKL yang sudah ditutup ke baris Praktik Kerja Lapangan; **Ekspor Excel** mengunduh rekap semua siswa; **Cetak** mencetak lembar Rekapitulasi Nilai Raport (pilih siswa, atau semua bila tidak ada yang dicentang).
+
+Untuk aplikasi yang sudah terpasang: perbarui `Kode.gs` dan `PKL.gs`, buat **Versi baru**, lalu unggah ulang frontend (ada berkas baru `js/pages-rapor.js`). Sheet `NilaiRapor` dibuat otomatis saat data pertama disimpan atau diimpor.
+
 ---
+
+### E10. Tampilan Landing (v2.0) untuk Guru, Instruktur & Siswa
+
+Mulai v2.0, akun **Guru Pembimbing, Instruktur Lapangan, dan Siswa** memakai tampilan ala halaman beranda (menu di atas; di HP menjadi 6 tombol di bawah). Akun **Admin tidak berubah** dan semua data lama tetap utuh.
+
+| Menu | Isi |
+|---|---|
+| Beranda | Tombol cepat + **Kabar & Dokumentasi** (info dan foto dari Guru/Instruktur/Admin) |
+| Petunjuk | Langkah penggunaan per peran + tanya-jawab (Admin dapat menambah catatan di Pengaturan) |
+| Data Siswa / Data Saya | Daftar siswa, tempat PKL, pekerjaan |
+| Absensi | Instruktur mengisi; Guru dan Siswa melihat |
+| Monev 1 / Monev 2 | Lembar monitoring & evaluasi (dulu "Observasi 1/2"); diisi Instruktur, Guru dan Siswa hanya melihat |
+
+**Kabar & Dokumentasi.** Guru dan Instruktur menekan *Buat Kabar* di Beranda, menulis info, menambahkan sampai 4 foto, lalu memilih sasaran: semua siswa bimbingan/di tempatnya atau siswa tertentu. Hanya siswa sasaran, pembuatnya, dan Admin yang melihat. Admin dapat mengirim ke semua pengguna, menyematkan, menyembunyikan, atau menghapus lewat menu **Kabar & Dokumentasi**. Foto dikecilkan otomatis dan disimpan di folder Drive *Dokumentasi Kegiatan* (dibuat otomatis saat foto pertama diunggah).
+
+**Kembali ke tampilan lama.** Admin: **Pengaturan → Tampilan Guru, Instruktur & Siswa → Klasik**. Setiap pengguna juga bisa memilih sendiri lewat **Akun Saya**.
+
+**Pembaruan dari v1.5.x:** ganti `Kode.gs` dan `PKL.gs` di Apps Script lalu *Versi baru*; ganti seluruh isi frontend kecuali `js/config.js` (ada berkas baru `js/pages-landing.js`). Tabel Kabar dibuat otomatis, tidak perlu setup ulang.
+
+### E11. Peran ganda, Laporan PKL, Pantau Guru, Rekap & Jadwal Penilaian (v2.1)
+
+**1. Peran ganda.** Di **Akun Pengguna → Ubah akun → Peran ganda**:
+
+| Peran utama | Pilihan peran ganda | Yang perlu diisi |
+|---|---|---|
+| Admin (mis. Kajur) | Juga Guru Pembimbing / Juga Instruktur / keduanya | *Data terkait* = data Guru; *Data Instruktur* bila juga Instruktur |
+| Guru Pembimbing | Juga Instruktur Lapangan | *Data Instruktur* (buat dulu di menu Siswa · Guru · Instruktur, pada DU/DI tempat ia membimbing, mis. Teaching Factory) |
+
+Pengguna berganti peran lewat pilihan di pojok kanan atas. Data yang terlihat menyesuaikan peran: sebagai Instruktur hanya siswa di DU/DI-nya, sebagai Guru hanya siswa bimbingannya.
+
+**2. Laporan PKL.** Siswa menempel link Google Docs di menu **Laporan PKL**. Guru Pembimbing memeriksanya di **Laporan Siswa** dan menandai **Perlu revisi** (wajib catatan) atau **Disetujui**. Bila siswa mengirim ulang, status kembali ke *Menunggu diperiksa*. Nilai Laporan tetap diisi terpisah di menu Penilaian.
+
+**3. Pantau Guru Pembimbing (Admin).** Menu **Monitoring PKL → Pantau Guru Pembimbing** menampilkan ringkasan per guru: jumlah siswa dan DU/DI, jadwal bimbingan berikutnya, dan jumlah laporan disetujui. Pilih satu guru untuk melihat tiap siswanya: tempat PKL, instruktur, bimbingan, laporan, dan status keenam penilaian. Gunakan filter *Tanpa jadwal bimbingan* atau *Laporan belum disetujui*.
+
+**4. Rekap Penilaian DU/DI (Admin).** Menu **Monitoring PKL → Rekap Penilaian DU/DI** menampilkan per instruktur berapa siswa yang sudah dinilai di Monev 1, Monev 2, dan Penilaian Akhir DUDI. Tombol **Ingatkan** membuka WhatsApp berisi daftar siswa yang belum dinilai (hanya penilaian yang sedang dibuka). Data juga dapat diekspor ke Excel.
+
+**5. Jadwal Penilaian (Admin/Kajur).** Tombol **Atur Jadwal Penilaian** ada di Rekap Penilaian dan di Pengaturan. Tiap penilaian (Monev 1, Monev 2, Penilaian Akhir DUDI, Pembimbing, Laporan, Presentasi) dapat diatur:
+- **Dibuka**: dapat diisi kapan saja. Ini bawaan, jadi tidak ada yang berubah sampai Anda mengaturnya.
+- **Sesuai tanggal**: hanya dapat diisi dari tanggal mulai sampai tanggal selesai (termasuk kedua tanggal).
+- **Ditutup**: tidak dapat diisi.
+
+Saat penilaian tidak dibuka, menu dan tombolnya tetap tampil dengan gembok dan keterangan tanggal. Nilai yang sudah ada tetap dapat dilihat. "Tutup nilai" per siswa di menu Nilai & Penutupan tetap berlaku seperti sebelumnya.
+
+**Pembaruan dari v2.0:** ganti `Kode.gs`, `Auth.gs`, dan `PKL.gs` di Apps Script lalu *Versi baru*. Ganti seluruh isi frontend kecuali `js/config.js` (ada berkas baru `js/pages-pantau.js`). Tabel *Laporan* dan kolom *RefTambahan* dibuat otomatis saat pertama dipakai.
+
+### E12. Nilai PKL untuk siswa (v2.2)
+
+- Siswa melihat **semua komponen nilai dan nilai akhir PKL** lewat tombol **Nilai PKL** di Beranda.
+- Bawaannya, nilai baru tampil ke siswa **setelah Admin menekan "Tutup nilai"** untuk siswa itu, di menu Nilai & Penutupan. Sebelum itu, siswa hanya melihat keterangan "Tampil setelah ditutup Admin". Penilaian oleh Instruktur dan Guru tetap berjalan seperti biasa. Pembatasan ini dilakukan di server, jadi nilai benar-benar tidak terkirim ke akun siswa.
+- Pengaturan ada di **Pengaturan → Tampilan → Siswa dapat melihat nilai PKL**: *Setelah Admin menekan Tutup nilai* (bawaan) atau *Langsung saat dinilai*.
+- Perbaikan: form Pengaturan Admin kini memuat semua nilai yang tersimpan (Masa sesi login, Peta E-Jurnal, Filter kelas), sehingga tombol Simpan tidak lagi ditolak.
 
 ## BAGIAN F — Pemeliharaan
 

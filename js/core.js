@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const CFG = window.APP_CONFIG || {};
-  const VERSI = CFG.VERSI || '1.0.0';
+  const VERSI = '2.2.0';                                   // versi aplikasi (tidak lagi dibaca dari config.js)
 
   /* ---------------- Penyimpanan lokal aman ---------------- */
   const LS = {
@@ -114,7 +114,8 @@
       if (!opt.silent) toast(r.message, 'bad');
       return { ok: false };
     },
-    set(d, ts, dariCache) { S.data = d; S.ts = ts || Date.now(); if (!dariCache) LS.set(S.key(), { ts: S.ts, d }); S.index(); },
+    set(d, ts, dariCache) { if (d && d.me && Sesi.me && d.me.peran === Sesi.peran && String(Sesi.me.ref || '') !== String(d.me.ref || '')) { Sesi.me.ref = d.me.ref; Sesi.save(); }
+      S.data = d; S.ts = ts || Date.now(); if (!dariCache) LS.set(S.key(), { ts: S.ts, d }); S.index(); },
     index() {
       const d = S.data, ix = { siswa: {}, guru: {}, ins: {}, dudi: {}, pen: {}, nilai: {}, abs: {}, prg: {}, kunci: {}, jurnal: {}, pres: {}, akun: {} };
       d.siswa.forEach(x => (ix.siswa[x.NIS] = x)); d.guru.forEach(x => (ix.guru[x.GuruID] = x)); d.instruktur.forEach(x => (ix.ins[x.InstrukturID] = x)); d.dudi.forEach(x => (ix.dudi[x.DUDIID] = x));
@@ -125,7 +126,8 @@
       d.kunci.forEach(x => (ix.kunci[x.NIS + '|' + x.Periode] = x.Status === 'TUTUP'));
       d.jurnal.forEach(x => (ix.jurnal[x.NIS + '|' + x.Periode] = x));
       d.presentasi.forEach(x => (ix.pres[x.NIS] = x));
-      (d.akun || []).forEach(x => (ix.akun[x.RefID + '|' + x.Peran] = x));
+      (d.akun || []).forEach(x => { ix.akun[x.RefID + '|' + x.Peran] = x; String(x.PeranTambahan || '').split(',').forEach(t => { t = t.trim(); if (t === 'GURU' && x.RefID) ix.akun[x.RefID + '|GURU'] = ix.akun[x.RefID + '|GURU'] || x; if (t === 'INSTRUKTUR' && x.RefTambahan) ix.akun[x.RefTambahan + '|INSTRUKTUR'] = ix.akun[x.RefTambahan + '|INSTRUKTUR'] || x; }); });
+      ix.lap = {}; (d.laporan || []).forEach(x => (ix.lap[x.NIS] = x));
       S.ix = ix;
     },
     set_(k) { return (S.data && S.data.pengaturan && S.data.pengaturan[k]) || ''; }
@@ -134,7 +136,20 @@
   const periodeAktif = () => String(P('PERIODE_AKTIF') || '1');
   function penOf(nis, periode) { const a = S.ix.pen[nis] || []; if (periode) return a.find(p => String(p.Periode) === String(periode)) || null; return a.find(p => String(p.Periode) === periodeAktif()) || a[0] || null; }
   function bobot() { try { return JSON.parse(P('BOBOT_NILAI') || '{}'); } catch (e) { return {}; } }
-  const JENIS = { OBS1: 'Observasi 1', OBS2: 'Observasi 2', PEMBIMBING: 'Penilaian Pembimbing', LAPORAN: 'Laporan (5 Kriteria)', PRESENTASI: 'Presentasi', AKHIR: 'Penilaian Akhir DUDI' };
+  const JENIS = { OBS1: 'Monev 1', OBS2: 'Monev 2', PEMBIMBING: 'Penilaian Pembimbing', LAPORAN: 'Laporan (5 Kriteria)', PRESENTASI: 'Presentasi', AKHIR: 'Penilaian Akhir DUDI' };
+  /** Jadwal buka/tutup penilaian (v2.1) → {buka, mode, mulai, selesai, pesan, label} */
+  function jadwalNilai(jenis) {
+    let o = {}; try { o = JSON.parse(P('JADWAL_NILAI') || '{}') || {}; } catch (e) { o = {}; }
+    const x = o[jenis] || { mode: 'BUKA' }, nm = JENIS[jenis] || jenis, h = hariIni(), out = { buka: true, mode: x.mode || 'BUKA', mulai: x.mulai || '', selesai: x.selesai || '', pesan: '', label: 'Dibuka' };
+    if (x.mode === 'TUTUP') return Object.assign(out, { buka: false, pesan: nm + ' sedang ditutup oleh Admin/Kajur.', label: 'Ditutup' });
+    if (x.mode === 'JADWAL') {
+      const rentang = (x.mulai ? fmtTgl(x.mulai) : '…') + ' – ' + (x.selesai ? fmtTgl(x.selesai) : '…');
+      if (x.mulai && h < x.mulai) return Object.assign(out, { buka: false, pesan: nm + ' baru dibuka mulai ' + fmtTgl(x.mulai) + '.', label: 'Dibuka ' + fmtTgl(x.mulai) });
+      if (x.selesai && h > x.selesai) return Object.assign(out, { buka: false, pesan: 'Jadwal pengisian ' + nm + ' sudah berakhir (' + fmtTgl(x.selesai) + ').', label: 'Berakhir ' + fmtTgl(x.selesai) });
+      return Object.assign(out, { label: 'Dibuka ' + rentang });
+    }
+    return out;
+  }
   function predikat(n) { const kkm = Number(P('KKM') || 75); return !n ? '-' : n >= 90 ? 'A' : n >= 80 ? 'B' : n >= kkm ? 'C' : 'D'; }
   const predikatTeks = { A: 'Amat Baik', B: 'Baik', C: 'Cukup', D: 'Kurang', '-': 'Belum dinilai' };
   /** Rekap kehadiran & nilai satu siswa untuk satu periode */
@@ -149,12 +164,34 @@
       lengkap: Object.keys(JENIS).filter(j => nilai[j] !== undefined).length, kunci: !!S.ix.kunci[nis + '|' + p],
       prg: (S.ix.prg[nis] || []).filter(x => String(x.Periode) === p && x.Status !== 'Dicabut') };
   }
-  function instrumen(jenis, pekerjaan) {
+  function subPekerjaan(v) { if (!v) return {}; if (typeof v === 'object') return v; try { const o = JSON.parse(v); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; } }
+  function instrumen(jenis, pekerjaan, sub) {
     const all = S.data.instrumen.filter(i => i.Jenis === jenis);
     if (jenis !== 'OBS1' && jenis !== 'OBS2') return all.sort((a, b) => a.No - b.No);
-    let r = all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === String(pekerjaan || '').toLowerCase());
-    if (!r.length) r = all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === 'umum');
-    return r.sort((a, b) => a.No - b.No);
+    const sudah = {}, r = [], pilih = {}, so = subPekerjaan(sub);
+    Object.keys(so).forEach(k => (pilih[k.toLowerCase()] = (so[k] || []).map(x => String(x).toLowerCase())));
+    const umum = () => all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === 'umum');
+    daftarPekerjaan(pekerjaan).forEach(pk => { let it = all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === pk.toLowerCase()); const sp = pilih[pk.toLowerCase()];
+      if (it.length && sp && sp.length) { const f = it.filter(i => sp.indexOf(String(i.Aspek).toLowerCase()) > -1); if (f.length) it = f; }
+      return (it.length ? it : umum()).sort((a, b) => a.No - b.No)
+      .forEach(i => { const k = String(i.Aspek || '').toLowerCase(); if (!sudah[k]) { sudah[k] = 1; r.push(i); } }); });
+    return r.length ? r : all.filter(i => (i.PekerjaanSpesifik || '').toLowerCase() === 'umum').sort((a, b) => a.No - b.No);
+  }
+  /** Pekerjaan spesifik bisa lebih dari satu, disimpan "A; B" */
+  function daftarPekerjaan(s) { const lihat = {}; return String(s || '').split(/[;\n]/).map(x => x.trim()).filter(x => x && !lihat[x.toLowerCase()] && (lihat[x.toLowerCase()] = 1)); }
+  const teksPekerjaan = (s, pemisah) => daftarPekerjaan(s).join(pemisah || ', ');
+  /** Katalog pekerjaan (diisi Admin): daftar Pengaturan + nama yang punya sub pekerjaan (aspek OBS) */
+  function katalogPekerjaan() {
+    const d = daftarPekerjaan(P('PEKERJAAN_SPESIFIK')), kecil = d.map(x => x.toLowerCase());
+    (S.data.instrumen || []).forEach(i => { const n = i.PekerjaanSpesifik; if ((i.Jenis === 'OBS1' || i.Jenis === 'OBS2') && n && n.toLowerCase() !== 'umum' && kecil.indexOf(n.toLowerCase()) < 0) { d.push(n); kecil.push(n.toLowerCase()); } });
+    return d;
+  }
+  /** Sub pekerjaan sebuah pekerjaan = aspek OBS1 ∪ OBS2 (unik per nama) */
+  function subDari(pk) {
+    const m = {}; (S.data.instrumen || []).filter(i => (i.Jenis === 'OBS1' || i.Jenis === 'OBS2') && (i.PekerjaanSpesifik || '').toLowerCase() === String(pk).toLowerCase())
+      .sort((a, b) => (a.Jenis + String(a.No).padStart(3, '0')).localeCompare(b.Jenis + String(b.No).padStart(3, '0')))
+      .forEach(i => { const k = String(i.Aspek).toLowerCase(); (m[k] = m[k] || { Aspek: i.Aspek, Deskripsi: i.Deskripsi, obs: [], id: {}, Bobot: i.Bobot }).obs.push(i.Jenis); m[k].id[i.Jenis] = i.InstrumenID; });
+    return Object.values(m);
   }
 
   /* ---------------- Helper tampilan ---------------- */
@@ -243,6 +280,7 @@
 
   /* ---------------- Builder form ---------------- */
   function fld(f) {
+    if (f.type === 'html') return '<div class="field' + (f.full ? ' full' : '') + '"><label>' + esc(f.label) + '</label>' + f.html + (f.help ? '<div class="help">' + f.help + '</div>' : '') + '</div>';
     const id = 'f_' + f.name + '_' + Math.random().toString(36).slice(2, 6), v = f.value == null ? '' : f.value;
     let inp;
     if (f.type === 'select') inp = '<select class="input" id="' + id + '" name="' + f.name + '"' + (f.req ? ' required' : '') + '>' + (f.kosong !== false ? '<option value="">' + esc(f.ph || '— Pilih —') + '</option>' : '') +
@@ -369,7 +407,11 @@
         values: rk.abs.map(a => { const h = (+a.Hadir) + (+a.Izin) + (+a.Sakit) + (+a.Alfa); return h ? Math.round(a.Hadir / h * 100) : 0; }) }] });
   };
   /** Ringkasan nilai satu siswa (kartu per jenis) */
+  /** Siswa belum boleh melihat nilai: bawaan, nilai tampil setelah Admin menutup nilai periode tsb. */
+  K.nilaiDitahan = (nis, periode) => Sesi.peran === 'SISWA' && (P('NILAI_SISWA') || 'TUTUP') !== 'LANGSUNG' && !rekap(nis, periode).kunci;
+  K.infoDitahan = () => '<div class="card empty">' + ic('hourglass_top') + '<div><b>Nilai PKL belum ditampilkan</b><div class="small muted mt-s">Nilai akan muncul setelah penilaian selesai dan Admin/Koordinator PKL menutup nilai kamu. Penilaian tetap berjalan seperti biasa.</div></div></div>';
   K.kartuNilai = function (nis, periode) {
+    if (K.nilaiDitahan(nis, periode)) return K.infoDitahan();
     const rk = rekap(nis, periode), bb = bobot();
     return '<div class="grid g3">' + Object.keys(JENIS).map(j => {
       const n = rk.nilai[j], ada = n !== undefined, draf = rk.nilai[j + '_draf'];
@@ -380,16 +422,17 @@
   };
   /** Formulir penilaian berbasis instrumen (dipakai Guru & Instruktur) */
   K.formNilai = function (nis, periode, jenis, bolehUbah) {
-    const pen = penOf(nis, periode) || {}, items = instrumen(jenis, pen.PekerjaanSpesifik), ada = S.ix.nilai[nis + '|' + pen.Periode + '|' + jenis];
+    const pen = penOf(nis, periode) || {}, items = instrumen(jenis, pen.PekerjaanSpesifik, pen.SubPekerjaan), ada = S.ix.nilai[nis + '|' + pen.Periode + '|' + jenis];
     let skor = {}, cat = {}, rek = '', draf = false; if (ada) { try { const o = JSON.parse(ada.Skor); skor = o.skor || {}; cat = o.catatan || {}; rek = o.rekomendasi || ''; draf = o.draf; } catch (e) {} }
-    const kunci = rekap(nis, pen.Periode).kunci, ro = !bolehUbah || kunci;
-    if (!items.length) return '<div class="alert warn">' + ic('info') + '<div><h4>Instrumen belum diatur</h4><p>Admin perlu mengatur instrumen ' + esc(JENIS[jenis]) + (pen.PekerjaanSpesifik ? ' untuk pekerjaan "' + esc(pen.PekerjaanSpesifik) + '"' : '') + '.</p></div></div>';
+    const kunci = rekap(nis, pen.Periode).kunci, jd = jadwalNilai(jenis), tutupJadwal = bolehUbah && !kunci && !jd.buka, ro = !bolehUbah || kunci || !jd.buka;
+    if (!items.length) return '<div class="alert warn">' + ic('info') + '<div><h4>Instrumen belum diatur</h4><p>Admin perlu mengatur instrumen ' + esc(JENIS[jenis]) + (pen.PekerjaanSpesifik ? ' untuk pekerjaan "' + esc(teksPekerjaan(pen.PekerjaanSpesifik)) + '"' : '') + '.</p></div></div>';
     const total = () => { let tb = 0, tn = 0; items.forEach(i => { tb += +i.Bobot || 1; tn += (+i.Bobot || 1) * (+skor[i.InstrumenID] || 0); }); return tb ? Math.round(tn / tb * 100) / 100 : 0; };
+    const tbAll = items.reduce((a, i) => a + (+i.Bobot || 1), 0), banyakPek = new Set(items.map(i => i.PekerjaanSpesifik)).size > 1;
     const kat = v => v >= 90 ? 'Amat Baik' : v >= 80 ? 'Baik' : v >= 70 ? 'Cukup' : v > 0 ? 'Kurang' : '—';
     const aspek = items.map((i, k) => {
       const v = skor[i.InstrumenID] === undefined ? '' : skor[i.InstrumenID];
       return '<div class="aspek"><div class="aspek-h"><span class="aspek-no">' + String(k + 1).padStart(2, '0') + '</span><div class="grow"><div class="b">' + esc(i.Aspek) + '</div><div class="small muted">' + esc(i.Deskripsi || '') + '</div>' +
-        '<div class="mt-s">' + pill('Bobot ' + i.Bobot + '%', 'info') + ' <span class="pill ok" data-kat="' + i.InstrumenID + '">' + kat(+v) + '</span></div></div>' +
+        '<div class="mt-s">' + pill('Bobot ' + Math.round((+i.Bobot || 1) / tbAll * 100) + '%', 'info') + (banyakPek ? ' ' + pill(i.PekerjaanSpesifik, 'mute') : '') + ' <span class="pill ok" data-kat="' + i.InstrumenID + '">' + kat(+v) + '</span></div></div>' +
         '<input class="input score-in" type="number" min="0" max="100" step="1" name="s_' + i.InstrumenID + '" value="' + esc(v) + '" data-inp="skor" data-id="' + i.InstrumenID + '"' + (ro ? ' disabled' : '') + ' aria-label="Skor ' + esc(i.Aspek) + '"></div>' +
         '<input type="range" min="0" max="100" value="' + (v === '' ? 0 : v) + '" data-inp="skor" data-id="' + i.InstrumenID + '"' + (ro ? ' disabled' : '') + ' aria-hidden="true" tabindex="-1" class="mt">' +
         '<div class="scale"><span>Kurang (&lt;70)</span><span>Cukup (70–79)</span><span>Baik (80–89)</span><span>Amat Baik (90–100)</span></div>' +
@@ -401,10 +444,10 @@
       '<div class="small muted mt">KKM ' + esc(P('KKM') || 75) + ' · ' + items.length + ' indikator</div>' +
       (jenis === 'AKHIR' ? '<div class="field mt"><label>Rekomendasi DUDI</label><select class="input" name="Rekomendasi"' + (ro ? ' disabled' : '') + '>' + ['', 'Sangat layak direkrut', 'Layak dengan pembinaan lanjutan', 'Belum memenuhi kualifikasi'].map(o => '<option' + (o === rek ? ' selected' : '') + '>' + o + '</option>').join('') + '</select></div>' : '') +
       '<div class="field mt"><label>Catatan umum</label><textarea class="input" name="Catatan" rows="3"' + (ro ? ' disabled' : '') + '>' + esc(ada ? ada.Catatan : '') + '</textarea></div>' +
-      (ro ? (kunci ? '<div class="locked-banner">' + ic('lock') + 'Nilai telah ditutup Admin — tidak dapat diubah.</div>' : '') :
+      (ro ? (kunci ? '<div class="locked-banner">' + ic('lock') + 'Nilai telah ditutup Admin — tidak dapat diubah.</div>' : tutupJadwal ? '<div class="locked-banner">' + ic('event_busy') + esc(jd.pesan) + '</div>' : '') :
         '<button class="btn block lg" data-act="simpanNilai" data-draf="0">' + ic('verified') + 'Simpan & Sahkan</button><button class="btn sec block mt-s" data-act="simpanNilai" data-draf="1">' + ic('save') + 'Simpan Draf</button>') +
       (ada ? '<div class="xs muted mt">Terakhir: ' + esc(fmtWaktu(ada.DiperbaruiPada)) + ' oleh ' + esc(ada.DinilaiOleh) + (draf ? ' · <b>draf</b>' : '') + '</div>' : '') + '</div>';
-    return '<form data-nilai data-nis="' + esc(nis) + '" data-periode="' + esc(pen.Periode) + '" data-jenis="' + jenis + '" onsubmit="return false"><div class="with-panel"><div>' + aspek + '</div><div>' + side + '</div></div></form>';
+    return (tutupJadwal ? '<div class="alert warn mb">' + ic('event_busy') + '<div><h4>Pengisian belum/tidak dibuka</h4><p>' + esc(jd.pesan) + ' Nilai yang sudah ada tetap dapat dilihat.</p></div></div>' : '') + '<form data-nilai data-nis="' + esc(nis) + '" data-periode="' + esc(pen.Periode) + '" data-jenis="' + jenis + '" onsubmit="return false"><div class="with-panel"><div>' + aspek + '</div><div>' + side + '</div></div></form>';
   };
   function hitungUlangNilai(form) {
     const items = [...form.querySelectorAll('input.score-in')]; let tb = 0, tn = 0;
@@ -431,26 +474,38 @@
   const MENU = {
     SISWA: [
       { sec: 'Navigasi Siswa' }, { id: 'dashboard', t: 'Dashboard', i: 'space_dashboard' }, { id: 'penempatan', t: 'Penempatan & Jadwal', i: 'calendar_month' },
-      { id: 'jurnal', t: 'Jurnal & Foto', i: 'photo_camera' }, { id: 'nilai', t: 'Nilai & Kehadiran', i: 'workspace_premium', badge: () => rekapSaya().prg.length, warna: 'rose' },
-      { id: 'kartu', t: 'Kartu PKL', i: 'badge' }, { sec: 'Bantuan' }, { id: 'dokumen', t: 'Dokumen Saya', i: 'description' }],
+      { id: 'jurnal', t: 'Jurnal & Foto', i: 'photo_camera' }, { id: 'nilai', t: 'Nilai & Kehadiran', i: 'workspace_premium', badge: () => rekapSaya().prg.length, warna: 'rose' }, { id: 'rapor', t: 'Nilai Rapor', i: 'menu_book' },
+      { id: 'laporan', t: 'Laporan PKL', i: 'article' }, { id: 'kartu', t: 'Kartu PKL', i: 'badge' }, { sec: 'Bantuan' }, { id: 'dokumen', t: 'Dokumen Saya', i: 'description' }, { id: 'kuisioner', t: 'Kuisioner', i: 'quiz', jika: () => (S.data.kuisioner || []).length > 0, badge: () => K.kuisionerTertunda ? K.kuisionerTertunda() : 0, warna: 'amber' }],
     GURU: [
       { sec: 'Panel Guru Pembimbing' }, { id: 'dashboard', t: 'Dashboard', i: 'space_dashboard' }, { id: 'siswa', t: 'Siswa Bimbingan', i: 'groups' },
-      { id: 'bimbingan', t: 'Jadwal Bimbingan', i: 'event_note' }, { id: 'penilaian', t: 'Penilaian', i: 'grading' },
+      { id: 'bimbingan', t: 'Jadwal Bimbingan', i: 'event_note' }, { id: 'laporan', t: 'Laporan Siswa', i: 'article', badge: () => (S.data.laporan || []).filter(l => l.Tahap === 'DIPERIKSA').length, warna: 'amber' }, { id: 'penilaian', t: 'Penilaian', i: 'grading' }, { id: 'rapor', t: 'Nilai Rapor Siswa', i: 'menu_book' },
       { sec: 'Supervisi & Bantuan' }, { id: 'peringatan', t: 'Peringatan Kehadiran', i: 'notification_important', badge: () => S.data.peringatan.filter(p => p.Status === 'Belum ditangani').length, warna: 'amber' },
-      { id: 'pesan', t: 'Pesan Darurat', i: 'emergency', badge: () => S.data.pesan.filter(p => p.Status === 'Baru').length }, { id: 'dokumen', t: 'Persetujuan Dokumen', i: 'draw' }],
+      { id: 'pesan', t: 'Pesan Darurat', i: 'emergency', badge: () => S.data.pesan.filter(p => p.Status === 'Baru').length }, { id: 'dokumen', t: 'Persetujuan Dokumen', i: 'draw' }, { id: 'kuisioner', t: 'Kuisioner', i: 'quiz', jika: () => (S.data.kuisioner || []).length > 0, badge: () => K.kuisionerTertunda ? K.kuisionerTertunda() : 0, warna: 'amber' }],
     INSTRUKTUR: [
       { sec: 'Aktivitas Lapangan' }, { id: 'dashboard', t: 'Dashboard', i: 'space_dashboard' }, { id: 'absensi', t: 'Presensi Mingguan', i: 'fact_check' },
-      { id: 'penilaian', t: 'Observasi & Penilaian', i: 'grading' }, { sec: 'Komunikasi & Bantuan' },
+      { id: 'pekerjaan', t: 'Pekerjaan Siswa', i: 'engineering', badge: () => S.data.penempatan.filter(p => String(p.Periode) === periodeAktif() && !p.PekerjaanSpesifik).length, warna: 'amber' },
+      { id: 'penilaian', t: 'Monev & Penilaian', i: 'grading' }, { sec: 'Komunikasi & Bantuan' },
       { id: 'peringatan', t: 'Data Izin/Alfa', i: 'notification_important', badge: () => S.data.peringatan.filter(p => p.Status === 'Belum ditangani').length, warna: 'amber' },
-      { id: 'pesan', t: 'Pesan Darurat', i: 'emergency' }],
+      { id: 'pesan', t: 'Pesan Darurat', i: 'emergency' }, { id: 'kuisioner', t: 'Kuisioner', i: 'quiz', jika: () => (S.data.kuisioner || []).length > 0, badge: () => K.kuisionerTertunda ? K.kuisionerTertunda() : 0, warna: 'amber' }],
     ADMIN: [
       { sec: 'Ringkasan' }, { id: 'dashboard', t: 'Dashboard', i: 'space_dashboard' },
       { sec: 'Data Master' }, { id: 'dudi', t: 'Data DUDI', i: 'apartment' }, { id: 'induk', t: 'Siswa · Guru · Instruktur', i: 'groups' }, { id: 'penempatan', t: 'Penempatan Siswa', i: 'hub' }, { id: 'akun', t: 'Akun Pengguna', i: 'manage_accounts' },
-      { sec: 'Monitoring PKL' }, { id: 'absensi', t: 'Absensi', i: 'fact_check' }, { id: 'peringatan', t: 'Peringatan Izin/Alfa', i: 'notification_important', badge: () => S.data.peringatan.filter(p => p.Status === 'Belum ditangani').length, warna: 'amber' },
-      { id: 'presentasi', t: 'Jadwal Presentasi', i: 'co_present' }, { id: 'nilai', t: 'Nilai & Penutupan', i: 'lock' }, { id: 'pesan', t: 'Pesan Darurat', i: 'emergency' }, { id: 'rekap', t: 'Rekap & Laporan', i: 'monitoring' },
-      { sec: 'Dokumen & Komunikasi' }, { id: 'kartu', t: 'Cetak Kartu PKL', i: 'badge' }, { id: 'dokumen', t: 'Doc Engine', i: 'description' }, { id: 'notifikasi', t: 'WhatsApp & Notifikasi', i: 'forum' }, { id: 'crm', t: 'CRM Kontak', i: 'contacts' },
-      { sec: 'Sistem' }, { id: 'migrasi', t: 'Import & Migrasi', i: 'sync_alt' }, { id: 'instrumen', t: 'Instrumen Penilaian', i: 'checklist' }, { id: 'pengaturan', t: 'Pengaturan', i: 'settings' }, { id: 'log', t: 'Log Aktivitas', i: 'history' }]
+      { sec: 'Monitoring PKL' }, { id: 'pantauguru', t: 'Pantau Guru Pembimbing', i: 'supervisor_account' }, { id: 'rekapnilai', t: 'Rekap Penilaian DU/DI', i: 'fact_check', badge: () => K.belumDinilai ? K.belumDinilai() : 0, warna: 'amber' }, { id: 'absensi', t: 'Absensi', i: 'event_available' }, { id: 'peringatan', t: 'Peringatan Izin/Alfa', i: 'notification_important', badge: () => S.data.peringatan.filter(p => p.Status === 'Belum ditangani').length, warna: 'amber' },
+      { id: 'presentasi', t: 'Jadwal Presentasi', i: 'co_present' }, { id: 'nilai', t: 'Nilai & Penutupan', i: 'lock' }, { id: 'rapor', t: 'Nilai Rapor', i: 'menu_book' }, { id: 'pesan', t: 'Pesan Darurat', i: 'emergency', badge: () => S.data.pesan.filter(p => p.Tujuan === 'ADMIN' && p.Status === 'Baru').length }, { id: 'rekap', t: 'Rekap & Laporan', i: 'monitoring' }, { id: 'kuisioner', t: 'Kuisioner', i: 'quiz' },
+      { sec: 'Dokumen & Komunikasi' }, { id: 'kartu', t: 'Cetak Kartu PKL', i: 'badge' }, { id: 'dokumen', t: 'Doc Engine', i: 'description' }, { id: 'kabar', t: 'Kabar & Dokumentasi', i: 'campaign' }, { id: 'notifikasi', t: 'WhatsApp & Notifikasi', i: 'forum' }, { id: 'crm', t: 'CRM Kontak', i: 'contacts' },
+      { sec: 'Sistem' }, { id: 'migrasi', t: 'Import & Migrasi', i: 'sync_alt' }, { id: 'pekerjaan', t: 'Pekerjaan & Sub', i: 'engineering' }, { id: 'instrumen', t: 'Instrumen Penilaian', i: 'checklist' }, { id: 'pengaturan', t: 'Pengaturan', i: 'settings' }, { id: 'log', t: 'Log Aktivitas', i: 'history' }]
   };
+
+  /* ---------------- Tampilan Landing (v2.0): menu atas, bukan sidebar ---------------- */
+  const LP_MENU = (dataT) => [
+    { id: 'beranda', t: 'Beranda', i: 'home' }, { id: 'petunjuk', t: 'Petunjuk', i: 'help' },
+    { id: 'data', t: dataT, s: dataT.indexOf('Siswa') > -1 ? 'Siswa' : 'Data', i: 'groups' }, { id: 'absensi', t: 'Absensi', i: 'fact_check' },
+    { id: 'monev1', t: 'Monev 1', i: 'looks_one' }, { id: 'monev2', t: 'Monev 2', i: 'looks_two' }];
+  const LP = { SISWA: LP_MENU('Data Saya'), GURU: LP_MENU('Data Siswa'), INSTRUKTUR: LP_MENU('Data Siswa') };
+  /** halaman klasik → tab Landing yang disorot */
+  const LP_INDUK = { jurnal: 'absensi', nilai: 'absensi', peringatan: 'absensi', penempatan: 'data', siswa: 'data', rapor: 'data', kartu: 'data', dokumen: 'data', pekerjaan: 'data', penilaian: 'monev1', bimbingan: 'data', laporan: 'data', pesan: 'beranda', kuisioner: 'beranda' };
+  const pilihanTampil = () => { try { return localStorage.getItem('sigapkl_tampil') || ''; } catch (e) { return ''; } };
+  const landing = () => Sesi.peran !== 'ADMIN' && !!LP[Sesi.peran] && (pilihanTampil() || P('TAMPILAN') || 'LANDING') !== 'KLASIK';
   function rekapSaya() { return Sesi.me && Sesi.peran === 'SISWA' && S.data ? rekap(Sesi.me.ref) : { prg: [] }; }
   const PUBLIK = ['login', 'lupa', 'darurat', 'v'];
   const App = {
@@ -480,17 +535,19 @@
       if (!Sesi.token) { if (['login', 'lupa', 'darurat'].indexOf(page) < 0) { location.replace('#/login'); return; } App.cur = page; root.innerHTML = Pages[page].render(param); Pages[page].after && Pages[page].after(param); return; }
       if (Sesi.me.wajibGanti || page === 'ganti') { App.cur = 'ganti'; root.innerHTML = Pages.ganti.render(); Pages.ganti.after && Pages.ganti.after(); return; }
       if (!S.data) { root.innerHTML = '<div class="auth"><div class="center"><span class="spin dark" style="width:36px;height:36px"></span><p class="muted mt">Menyiapkan data…</p><button class="btn ghost sm mt" data-act="logout">Keluar</button></div></div>'; return; }
-      const menu = MENU[Sesi.peran] || [], ids = menu.filter(m => m.id).map(m => m.id);
-      let id = ids.indexOf(page) > -1 ? page : 'dashboard';
+      const lp = landing(), klasik = (MENU[Sesi.peran] || []).filter(m => !m.jika || m.jika());
+      const menu = lp ? LP[Sesi.peran] : klasik, ids = (lp ? menu.concat(klasik) : klasik).filter(m => m.id && !(lp && m.id === 'dashboard')).map(m => m.id);
+      const awal = lp ? 'beranda' : 'dashboard';
+      let id = page === 'dashboard' ? awal : ids.indexOf(page) > -1 ? page : awal;
       if (page !== id) { history.replaceState(null, '', '#/' + id); }
       const key = Sesi.peran + ':' + id, pg = Pages[key] || Pages[id];
       App.cur = id; App.param = param;
       const y = window.scrollY;
-      root.innerHTML = layout(menu, id, pg ? pg.render(param) : '<div class="empty">Halaman belum tersedia.</div>');
+      root.innerHTML = (lp ? layoutLanding : layout)(menu, id, pg ? pg.render(param) : '<div class="empty">Halaman belum tersedia.</div>');
       if (pg && pg.after) pg.after(param);
       isiQr(root);
       if (pertahankanScroll) window.scrollTo(0, y);
-      document.title = (menu.find(m => m.id === id) || {}).t + ' · SIGAPKL';
+      document.title = ((menu.find(m => m.id === id) || klasik.find(m => m.id === id) || {}).t || 'Beranda') + ' · SIGAPKL';
     }
   };
   function layout(menu, aktif, isi) {
@@ -512,10 +569,28 @@
       '<div class="main"><header class="topbar"><button class="icon-btn hamb" data-act="menu" aria-label="Menu">' + ic('menu') + '</button>' +
       '<label class="search">' + ic('search') + '<input type="search" placeholder="Cari siswa, DUDI, jadwal, atau nilai…" value="' + esc(S.q) + '" data-inp="cari" aria-label="Cari"></label>' +
       '<span class="chip-ta">' + ic('school') + 'TA ' + esc(P('TAHUN_AJARAN')) + ' · Periode ' + esc(periodeAktif()) + '</span>' +
-      '<div class="me">' + (roles.length > 1 ? '<select class="role-sel" data-chg="peran" aria-label="Ganti peran">' + roles.map(r => '<option value="' + r + '"' + (r === Sesi.peran ? ' selected' : '') + '>' + (r === 'ADMIN' ? 'Admin' : r === 'GURU' ? 'Guru Pembimbing' : r) + '</option>').join('') + '</select>' : '') +
+      '<div class="me">' + (roles.length > 1 ? '<select class="role-sel" data-chg="peran" aria-label="Ganti peran">' + roles.map(r => '<option value="' + r + '"' + (r === Sesi.peran ? ' selected' : '') + '>' + (r === 'ADMIN' ? 'Admin' : r === 'GURU' ? 'Guru Pembimbing' : r === 'INSTRUKTUR' ? 'Instruktur Lapangan' : r) + '</option>').join('') + '</select>' : '') +
       '<button class="icon-btn" data-act="notifPanel" aria-label="Notifikasi">' + ic('notifications') + (nNotif ? '<span class="dot"></span>' : '') + '</button>' +
       '<div class="me-txt"><div class="n">' + esc(me.nama) + '</div><div class="s">' + esc(peranLabel) + '</div></div><button class="icon-btn" style="border-radius:50%;padding:0;border:0" data-act="akunSaya" aria-label="Akun saya">' + av(me.nama, Sesi.peran === 'SISWA' ? (S.ix.siswa[me.ref] || {}).FotoURL : '', '') + '</button></div></header>' +
-      '<main class="content" id="content">' + (aktif === 'dashboard' ? Tema.banner() : '') + isi + '</main></div></div><nav class="bottom-nav">' + bot + '</nav>';
+      '<main class="content" id="content">' + (aktif === 'dashboard' ? Tema.banner() + (K.bannerKuisioner ? K.bannerKuisioner() : '') : '') + isi + '</main></div></div><nav class="bottom-nav">' + bot + '</nav>';
+  }
+  function layoutLanding(menu, aktif, isi) {
+    const me = Sesi.me, peranLabel = { GURU: 'Guru Pembimbing', INSTRUKTUR: 'Instruktur Lapangan', SISWA: 'Siswa' }[Sesi.peran] || Sesi.peran;
+    const logo = driveImg(P('LOGO_URL'), 120), induk = menu.some(m => m.id === aktif) ? aktif : (LP_INDUK[aktif] || 'beranda'), roles = me.roles || [Sesi.peran];
+    let nav = '', bot = '';
+    menu.forEach(m => {
+      const on = m.id === induk, jdM = Sesi.peran === 'INSTRUKTUR' && /^monev[12]$/.test(m.id) ? jadwalNilai(m.id === 'monev1' ? 'OBS1' : 'OBS2') : null, b = m.badge ? m.badge() : 0;
+      nav += '<a href="#/' + m.id + '" class="' + (on ? 'on' : '') + (jdM && !jdM.buka ? ' tutup' : '') + '"' + (jdM && !jdM.buka ? ' title="' + esc(jdM.pesan) + '"' : '') + '>' + ic(m.i, on ? 'fill' : '') + '<span>' + esc(m.t) + '</span>' + (jdM && !jdM.buka ? ic('lock') : '') + (b ? '<span class="badge">' + b + '</span>' : '') + '</a>';
+      bot += '<a href="#/' + m.id + '" class="' + (on ? 'on' : '') + '">' + ic(m.i, on ? 'fill' : '') + '<span>' + esc(m.s || m.t) + '</span></a>';
+    });
+    const nNotif = (S.data.pesan || []).filter(p => p.Status === 'Baru').length + (S.data.peringatan || []).filter(p => p.Status === 'Belum ditangani').length;
+    return '<div class="lp"><header class="lp-top"><div class="lp-in"><a class="lp-brand" href="#/beranda"><span class="brand-logo">' + (logo ? '<img src="' + esc(logo) + '" alt="" referrerpolicy="no-referrer">' : ic('hub', 'fill')) + '</span><span><b>SIGAPKL – TKJ</b><small>' + esc(P('NAMA_SEKOLAH') || 'SMK') + '</small></span></a>' +
+      '<nav class="lp-nav" aria-label="Menu utama">' + nav + '</nav><div class="lp-me">' +
+      (roles.length > 1 ? '<select class="role-sel" data-chg="peran" aria-label="Ganti peran">' + roles.map(r => '<option value="' + r + '"' + (r === Sesi.peran ? ' selected' : '') + '>' + (r === 'ADMIN' ? 'Admin' : r === 'GURU' ? 'Guru Pembimbing' : r === 'INSTRUKTUR' ? 'Instruktur Lapangan' : r) + '</option>').join('') + '</select>' : '') +
+      '<button class="icon-btn" data-act="notifPanel" aria-label="Notifikasi">' + ic('notifications') + (nNotif ? '<span class="dot"></span>' : '') + '</button>' +
+      '<button class="lp-akun" data-act="akunSaya" aria-label="Akun saya">' + av(me.nama, Sesi.peran === 'SISWA' ? (S.ix.siswa[me.ref] || {}).FotoURL : '', 'av-sm') + '<span class="lp-akun-t"><b>' + esc(String(me.nama).split(' ').slice(0, 2).join(' ')) + '</b><small>' + esc(peranLabel) + '</small></span></button></div></div></header>' +
+      '<main class="lp-main" id="content">' + isi + '</main>' +
+      '<footer class="lp-foot">' + esc(P('NAMA_SEKOLAH') || '') + ' · TA ' + esc(P('TAHUN_AJARAN')) + ' · Periode ' + esc(periodeAktif()) + ' · v' + VERSI + '</footer></div><nav class="lp-bot" aria-label="Menu utama">' + bot + '</nav>';
   }
   function halamanKonfigurasi() {
     return '<div class="auth"><div class="auth-card"><div class="auth-logo">' + ic('settings', 'fill') + '</div><h1>Konfigurasi belum lengkap</h1><p class="tagline">Frontend belum terhubung ke backend Apps Script.</p>' +
@@ -566,9 +641,10 @@
     if (!(await konfirmasi('Keluar dari SIGAPKL di perangkat ini?', { ok: 'Keluar' }))) return;
     api('auth.logout', {}); Sesi.clear(); App.go('#/login');
   };
+  Act.tampilanSaya = () => { try { localStorage.setItem('sigapkl_tampil', landing() ? 'KLASIK' : 'LANDING'); } catch (e) {} document.querySelectorAll('.modal-bg').forEach(x => x.remove()); App.go('#/' + (landing() ? 'dashboard' : 'beranda')); App.render(); };
   Act.akunSaya = () => {
     const m = modal({ title: 'Akun Saya', icon: 'account_circle', size: 'sm', body: '<div class="kv"><dt>Nama</dt><dd>' + esc(Sesi.me.nama) + '</dd><dt>Username</dt><dd>' + esc(Sesi.me.username) + '</dd><dt>Peran</dt><dd>' + esc((Sesi.me.roles || []).join(', ')) + '</dd></div>' +
-      '<div class="mt"><button class="btn sec block" data-g>' + ic('password') + 'Ganti Kata Sandi</button><button class="btn ghost block mt-s" data-semua>' + ic('devices') + 'Keluar dari semua perangkat</button></div>', foot: false });
+      '<div class="mt">' + (Sesi.peran !== 'ADMIN' && LP[Sesi.peran] ? '<button class="btn sec block mb-s" data-act="tampilanSaya">' + ic(landing() ? 'view_sidebar' : 'dashboard') + (landing() ? 'Pakai tampilan Klasik (menu samping)' : 'Pakai tampilan Beranda (menu atas)') + '</button>' : '') + '<button class="btn sec block" data-g>' + ic('password') + 'Ganti Kata Sandi</button><button class="btn ghost block mt-s" data-semua>' + ic('devices') + 'Keluar dari semua perangkat</button></div>', foot: false });
     m.el.querySelector('[data-g]').onclick = () => { m.close(); App.go('#/ganti'); };
     m.el.querySelector('[data-semua]').onclick = async () => { m.close(); if (!(await konfirmasi('Semua sesi di perangkat lain akan berakhir. Lanjutkan?', { danger: true }))) return; await api('auth.logout', { semua: true }); Sesi.clear(); App.go('#/login'); };
   };
@@ -718,8 +794,46 @@
   };
   Act.tutupUcapan = el => { LS.set(el.dataset.k, 1); const b = el.closest('.tema-ucapan'); if (b) b.remove(); };
 
+  /* ---------------- Pilih pekerjaan spesifik + sub (Instruktur / Admin) ---------------- */
+  K.ringkasPekerjaan = function (pen) {
+    const list = daftarPekerjaan(pen && pen.PekerjaanSpesifik), sub = subPekerjaan(pen && pen.SubPekerjaan);
+    if (!list.length) return '<span class="pill warn dot">Belum dipilih</span>';
+    return list.map(pk => { const n = (sub[pk] || []).length, tot = subDari(pk).length; return '<span class="tag">' + esc(pk) + (tot ? ' <span class="muted">· ' + (n && n < tot ? n + '/' + tot : tot) + ' sub</span>' : ' <span class="muted">· indikator Umum</span>') + '</span>'; }).join(' ');
+  };
+  Act.aturPekerjaan = el => {
+    const nis = el.dataset.nis, pen = penOf(nis, el.dataset.periode) || {}, s = S.ix.siswa[nis] || {}, kat = katalogPekerjaan();
+    const dipilih = daftarPekerjaan(pen.PekerjaanSpesifik).map(x => x.toLowerCase()), sub = subPekerjaan(pen.SubPekerjaan), subK = {};
+    Object.keys(sub).forEach(k => (subK[k.toLowerCase()] = (sub[k] || []).map(x => String(x).toLowerCase())));
+    const adaNilai = ['OBS1', 'OBS2'].some(j => S.ix.nilai[nis + '|' + pen.Periode + '|' + j]);
+    if (rekap(nis, pen.Periode).kunci) { toast('Nilai siswa ini sudah ditutup Admin; pekerjaan tidak dapat diubah.', 'warn'); return; }
+    const kartu = kat.map((pk, i) => {
+      const on = dipilih.indexOf(pk.toLowerCase()) > -1, subs = subDari(pk), sp = subK[pk.toLowerCase()];
+      return '<div class="pk-card' + (on ? ' on' : '') + '" data-pk="' + esc(pk) + '"><label class="pk-h"><input type="checkbox" class="pk-cek" data-chg="pkCek"' + (on ? ' checked' : '') + '><span class="grow"><b>' + esc(pk) + '</b><span class="xs muted">' + (subs.length ? subs.length + ' sub pekerjaan' : 'Belum ada sub — dinilai dengan indikator Umum') + '</span></span></label>' +
+        (subs.length ? '<div class="pk-sub">' + subs.map(x => '<label><input type="checkbox" class="sub-cek" value="' + esc(x.Aspek) + '"' + (!on || !sp || !sp.length || sp.indexOf(String(x.Aspek).toLowerCase()) > -1 ? ' checked' : '') + '><span class="grow">' + esc(x.Aspek) + (x.Deskripsi ? '<span class="xs muted">' + esc(x.Deskripsi) + '</span>' : '') + '</span>' +
+          x.obs.map(o => '<span class="pill mute">' + (o === 'OBS1' ? 'Monev 1' : 'Monev 2') + '</span>').join('') + '</label>').join('') + '</div>' : '') + '</div>';
+    }).join('');
+    const m = modal({ title: 'Pekerjaan Spesifik · ' + (s.Nama || nis), icon: 'engineering', size: 'lg',
+      body: '<p class="small muted" style="margin-top:0">Centang pekerjaan yang dikerjakan siswa di ' + esc(nmDudi(pen.DUDIID)) + ', lalu pilih sub pekerjaannya. Sub yang dicentang menjadi aspek yang dinilai di Lembar Monev.</p>' +
+        (adaNilai ? '<div class="alert warn mb">' + ic('info') + '<div><p class="small">Lembar Monev siswa ini sudah pernah dinilai. Jika pekerjaan/sub diubah, buka lagi Lembar Monev dan simpan ulang agar nilainya mengikuti aspek baru.</p></div></div>' : '') +
+        (kat.length ? '<div class="pk-list" id="pk-list">' + kartu + '</div>' : '<div class="empty">' + ic('engineering') + 'Admin belum mengisi daftar pekerjaan spesifik.</div>') +
+        (pen.PekerjaanDiaturOleh ? '<p class="xs muted mt">Terakhir diatur: ' + esc(pen.PekerjaanDiaturOleh) + '</p>' : '') +
+        (Sesi.peran === 'INSTRUKTUR' ? '<p class="small mt">Pekerjaan yang dikerjakan siswa tidak ada di daftar? <a href="#" data-act="usulPekerjaan">Usulkan ke Admin</a>.</p>' : ''),
+      foot: '<button class="btn ghost" data-x>Batal</button><button class="btn" data-ok>' + ic('save') + 'Simpan Pekerjaan</button>' });
+    m.el.querySelector('[data-ok]').onclick = async e => {
+      const kartuOn = [...m.el.querySelectorAll('.pk-card')].filter(c => c.querySelector('.pk-cek').checked);
+      if (!kartuOn.length) { toast('Centang minimal satu pekerjaan.', 'warn'); return; }
+      const Pekerjaan = [], Sub = {};
+      for (const c of kartuOn) {
+        const pk = c.dataset.pk, cek = [...c.querySelectorAll('.sub-cek')]; Pekerjaan.push(pk);
+        if (cek.length) { const v = cek.filter(x => x.checked).map(x => x.value); if (!v.length) { toast('"' + pk + '": centang minimal satu sub pekerjaan.', 'warn'); return; } Sub[pk] = v.length === cek.length ? [] : v; }
+      }
+      await simpan(e.currentTarget, 'pekerjaan.atur', { NIS: nis, Periode: pen.Periode, Pekerjaan, Sub }, { tutup: m.close });
+    };
+  };
+  Act.pkCek = el => { const c = el.closest('.pk-card'); c.classList.toggle('on', el.checked); if (el.checked) c.querySelectorAll('.sub-cek').forEach(x => (x.checked = true)); };
+
   /* ---------------- Ekspor global ---------------- */
   Object.assign(window, { App, Sesi, S, api, Pages, Act, Forms, Inp, K, P, esc, ic, av, pill, pillStatus, toast, modal, konfirmasi, busy, simpan, fld, bacaForm, formModal, barChart, donut, rekap, penOf,
-    periodeAktif, instrumen, JENIS, predikat, predikatTeks, bobot, fmtTgl, fmtTglL, fmtWaktu, isoTgl, tambahHari, hariIni, tglObj, HARI, BLN, inisial, driveImg, driveId, nmSiswa, nmGuru, nmIns, nmDudi, num, cari,
-    eksporXlsx, bacaBerkasTabel, qrDataUrl, isiQr, cetak, warmUp, LS, urlSiap, Tema });
+    periodeAktif, instrumen, JENIS, jadwalNilai, landing, LP, predikat, predikatTeks, bobot, fmtTgl, fmtTglL, fmtWaktu, isoTgl, tambahHari, hariIni, tglObj, HARI, BLN, inisial, driveImg, driveId, nmSiswa, nmGuru, nmIns, nmDudi, num, cari,
+    eksporXlsx, bacaBerkasTabel, muatXlsx, qrDataUrl, isiQr, cetak, warmUp, LS, urlSiap, Tema, daftarPekerjaan, teksPekerjaan, katalogPekerjaan, subDari, subPekerjaan });
 })();
