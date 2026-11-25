@@ -84,11 +84,14 @@
       return '<tr data-j="' + j + '"><td><b>' + esc(JENIS[j]) + '</b><div class="xs muted">Diisi ' + esc(PENGISI[j]) + '</div></td><td><select class="input" data-m>' + [['BUKA', 'Dibuka'], ['JADWAL', 'Sesuai tanggal'], ['TUTUP', 'Ditutup']].map(m => '<option value="' + m[0] + '"' + (x.mode === m[0] ? ' selected' : '') + '>' + m[1] + '</option>').join('') + '</select></td>' +
         '<td><input type="date" class="input" data-a value="' + esc(x.mulai || '') + '"></td><td><input type="date" class="input" data-b value="' + esc(x.selesai || '') + '"></td></tr>'; };
     const m = modal({ title: 'Jadwal Penilaian', icon: 'event_available', size: 'lg',
-      body: '<p class="small muted" style="margin-top:0"><b>Dibuka</b>: dapat diisi kapan saja. <b>Sesuai tanggal</b>: hanya dapat diisi di antara tanggal mulai dan selesai (termasuk kedua tanggal). <b>Ditutup</b>: tidak dapat diisi. Nilai yang sudah ada tetap tersimpan dan dapat dilihat.</p>' +
+      body: '<p class="small muted" style="margin-top:0"><b>Dibuka</b>: dapat diisi kapan saja. <b>Sesuai tanggal</b>: hanya dapat diisi di antara tanggal mulai dan selesai (termasuk kedua tanggal). <b>Ditutup</b>: tidak dapat diisi. Nilai yang sudah ada tetap tersimpan dan dapat dilihat.<br>Cukup isi tanggal mulai/selesai — status otomatis berubah menjadi <b>Sesuai tanggal</b>.</p>' +
         '<div class="tbl-wrap"><table class="tbl jd-tbl"><thead><tr><th>Penilaian</th><th>Status</th><th>Mulai</th><th>Selesai</th></tr></thead><tbody>' + URUT_JADWAL.map(baris).join('') + '</tbody></table></div>',
       foot: '<button class="btn ghost" data-x>Batal</button><button class="btn" data-ok>' + ic('save') + 'Simpan Jadwal</button>' });
-    const sinkron = () => m.el.querySelectorAll('tr[data-j]').forEach(tr => { const on = tr.querySelector('[data-m]').value === 'JADWAL'; tr.querySelectorAll('[data-a],[data-b]').forEach(i => { i.disabled = !on; }); });
-    m.el.querySelectorAll('[data-m]').forEach(s => { s.onchange = sinkron; }); sinkron();
+    // Tanggal selalu dapat diisi; mengisi tanggal otomatis mengubah status menjadi "Sesuai tanggal"
+    const sinkron = () => m.el.querySelectorAll('tr[data-j]').forEach(tr => { const on = tr.querySelector('[data-m]').value === 'JADWAL'; tr.querySelectorAll('[data-a],[data-b]').forEach(i => { i.classList.toggle('redup', !on); }); });
+    m.el.querySelectorAll('[data-m]').forEach(s => { s.onchange = sinkron; });
+    m.el.querySelectorAll('[data-a],[data-b]').forEach(i => { i.addEventListener('input', () => { if (i.value) { i.closest('tr').querySelector('[data-m]').value = 'JADWAL'; sinkron(); } }); });
+    sinkron();
     const b = m.el.querySelector('[data-ok]');
     b.onclick = () => {
       const out = {};

@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const CFG = window.APP_CONFIG || {};
-  const VERSI = '2.2.0';                                   // versi aplikasi (tidak lagi dibaca dari config.js)
+  const VERSI = '2.2.1';                                   // versi aplikasi (tidak lagi dibaca dari config.js)
 
   /* ---------------- Penyimpanan lokal aman ---------------- */
   const LS = {
