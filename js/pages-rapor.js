@@ -24,15 +24,15 @@
     };
     const item = {}, grup = {}, jumlah = {}, hitungSem = {};
     st.kelompok.forEach(g => {
-      const per = {};
+      const per = {}, semuaG = [];                           // semuaG: semua nilai semester dalam kelompok
       (g.item || []).forEach(it => {
         const v = {}; sem.forEach(k => { v[k] = efektif(it, k); });
         item[it.id] = { sem: v, rata: rata(sem.map(k => v[k])) };
         (it.sub || []).forEach(x => { const vs = {}; sem.forEach(k => { vs[k] = (x.sem || []).indexOf(k) > -1 ? val(x.id, k) : null; }); item[x.id] = { sem: vs, rata: rata(sem.map(k => vs[k])) }; });
-        sem.forEach(k => { if (v[k] !== null) { (per[k] = per[k] || []).push(v[k]); jumlah[k] = (jumlah[k] || 0) + v[k]; hitungSem[k] = (hitungSem[k] || 0) + 1; } });
+        sem.forEach(k => { if (v[k] !== null) { (per[k] = per[k] || []).push(v[k]); semuaG.push(v[k]); jumlah[k] = (jumlah[k] || 0) + v[k]; hitungSem[k] = (hitungSem[k] || 0) + 1; } });
       });
       const gs = {}; sem.forEach(k => { gs[k] = per[k] ? rata(per[k]) : null; });
-      grup[g.id] = { sem: gs, rata: rata((g.item || []).map(it => item[it.id].rata)) };
+      grup[g.id] = { sem: gs, rata: rata(semuaG) };        // sama dengan berkas sekolah: rata-rata semua nilai semester di kelompok itu
     });
     const rataSem = {}; sem.forEach(k => { rataSem[k] = hitungSem[k] ? jumlah[k] / hitungSem[k] : null; });
     const terisi = sem.filter(k => hitungSem[k]);
@@ -331,7 +331,7 @@
   function cariMapel(label, st) {
     const L = norm(label); if (!L) return null;
     const semuaItem = st.kelompok.flatMap(g => (g.item || []).flatMap(it => [it].concat(it.sub || [])));
-    let hit = semuaItem.find(x => norm(x.nama) === L || x.id === L) || semuaItem.find(x => (ALIAS[x.id] || []).indexOf(L) > -1);
+    let hit = semuaItem.find(x => norm(x.nama) === L || norm(x.label) === L || x.id === L) || semuaItem.find(x => (ALIAS[x.id] || []).indexOf(L) > -1);
     if (!hit) hit = semuaItem.find(x => { const n = norm(x.nama); return n.length >= 6 && (L.indexOf(n) === 0 || n.indexOf(L) === 0); }) || semuaItem.find(x => (ALIAS[x.id] || []).some(a => a.length >= 3 && L.indexOf(a) === 0));
     return hit || null;
   }
@@ -373,28 +373,49 @@
     const mapel = {}; peta.forEach(p => { if (p && p.f === 'N') (mapel[p.nama] = mapel[p.nama] || []).push(p.k); });
     return { hasil, mapel, abaikan: Object.keys(abaikan), info: { abs: peta.some(p => p && p.f === 'ABS'), wali: peta.some(p => p && p.f === 'WALI'), rank: peta.some(p => p && p.f === 'RANK') } };
   }
-  /* ---------- Templat Excel (format yang sama dengan berkas rekap sekolah; bisa diisi lalu diimpor) ---------- */
+  /* ---------- Templat Excel: tata letak SAMA dengan berkas "Rekapitulasi Nilai Raport" sekolah ----------
+   * No. | NIS | NISN | NIS / NISN | NAMA SISWA | TEMPAT TANGGAL LAHIR | mapel (semester… + Rata2) per kelompok + "Rata - Rata Kelompok …"
+   * | JUMLAH NILAI Sem1… | RATA2 NILAI Sem1… | Semester 1…6 (I,S,A) | WALI KELAS (X,XI,XII) | RANGKING 1…  — baris 3 = nomor kolom.
+   * Kolom hitungan (Rata2, rata-rata kelompok, jumlah, rata2 nilai) diisi nilai hitungan aplikasi dan DIABAIKAN saat impor. */
+  const judulKel = t => String(t || '').toLowerCase().replace(/(^|\s)\S/g, x => x.toUpperCase());
   function templatAoa(st, data) {
-    const sem = semua(st), h1 = ['NO', 'NIS', 'NISN', 'NAMA SISWA', 'TEMPAT TANGGAL LAHIR'], h2 = ['', '', '', '', ''], kol = [], merges = [];
-    for (let c = 0; c < 5; c++) merges.push({ s: { r: 0, c }, e: { r: 1, c } });
-    const grupKol = (label, subs, isi) => { const c0 = h1.length; subs.forEach((x, i) => { h1.push(i ? '' : label); h2.push(x); kol.push(isi(x)); }); if (subs.length > 1) merges.push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + subs.length - 1 } }); };
-    st.kelompok.forEach(g => (g.item || []).forEach(it => [it].concat(it.sub || []).forEach(x => grupKol(x.nama, (x.sem || []).slice(), k => rec => { const v = ((rec && rec.Nilai) || {})[x.id]; return v && v[k] !== undefined ? v[k] : ''; }))));
-    sem.concat(sem.indexOf(6) < 0 ? [6] : []).forEach(k => grupKol('Semester ' + k, ['I', 'S', 'A'], j => rec => { const v = (((rec && rec.Absensi) || {})[k] || {})[j]; return v === undefined ? '' : v; }));
-    grupKol('WALI KELAS', ['X', 'XI', 'XII'], k => rec => ((rec && rec.WaliKelas) || {})[k] || '');
-    grupKol('RANGKING', sem.slice(), k => rec => { const v = ((rec && rec.Ranking) || {})[k]; return v === undefined ? '' : v; });
-    const baris = data.map((d, i) => [i + 1, String(d.nis), String((d.rec && d.rec.NISN) || d.nisn || ''), (d.rec && d.rec.Nama) || d.nama || '', (d.rec && d.rec.TTL) || ''].concat(kol.map(f => f(d.rec))));
-    return { aoa: [h1, h2].concat(baris), merges, lebar: h1.length };
+    const sem = semua(st), d = +cfg().desimal || 0, h1 = [], h2 = [], kol = [], merges = [];
+    const bulat = v => v === null || v === undefined ? '' : Math.round(v * Math.pow(10, d)) / Math.pow(10, d);
+    const nilai = v => v === null || v === undefined ? '' : Math.round(v * 100) / 100;
+    const satu = (label, isi) => { const c = h1.length; h1.push(label); h2.push(''); kol.push(isi); merges.push({ s: { r: 0, c }, e: { r: 1, c } }); };
+    const grup = (label, subs, isi) => { const c0 = h1.length; subs.forEach((x, i) => { h1.push(i ? '' : label); h2.push(x); kol.push(isi(x)); }); if (subs.length > 1) merges.push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + subs.length - 1 } }); };
+    satu('No.', c => c.i + 1); satu('NIS', c => c.nis); satu('NISN', c => c.nisn); satu('NIS / NISN', c => c.nis + (c.nisn ? ' / ' + c.nisn : ''));
+    satu('NAMA SISWA', c => c.nama); satu('TEMPAT TANGGAL LAHIR', c => c.ttl);
+    st.kelompok.forEach(g => {
+      // seperti berkas sekolah: mapel satu kolom (mis. PKL) ditaruh di akhir kelompoknya
+      (g.item || []).filter(it => (it.sem || []).length > 1).concat((g.item || []).filter(it => (it.sem || []).length <= 1)).forEach(it => {
+        const lbl = it.label || it.nama, ss = (it.sem || []).slice();
+        if (ss.length === 1) satu(lbl, c => nilai(c.h.item[it.id].sem[ss[0]]));
+        else grup(lbl, ss.concat(['Rata2']), x => x === 'Rata2' ? c => bulat(c.h.item[it.id].rata) : c => nilai(c.h.item[it.id].sem[x]));
+      });
+      satu('Rata - Rata ' + judulKel(g.nama), c => bulat(c.h.grup[g.id].rata));
+    });
+    grup('JUMLAH \nNILAI', sem.map(k => 'Sem' + k), x => c => bulat(c.h.jumlah[+x.slice(3)]));
+    grup('RATA2\nNILAI', sem.map(k => 'Sem' + k), x => c => bulat(c.h.rataSem[+x.slice(3)]));
+    sem.concat(sem.indexOf(6) < 0 ? [6] : []).forEach(k => grup('Semester ' + k, ['I', 'S', 'A'], j => c => { const v = (((c.rec && c.rec.Absensi) || {})[k] || {})[j]; return v === undefined ? '' : v; }));
+    grup('WALI KELAS', ['X', 'XI', 'XII'], k => c => ((c.rec && c.rec.WaliKelas) || {})[k] || '');
+    grup('RANGKING', sem.map(String), k => c => { const v = ((c.rec && c.rec.Ranking) || {})[k]; return v === undefined ? '' : v; });
+    const nomor = h1.map((x, i) => i + 1);
+    const baris = data.map((x, i) => { const rec = x.rec || null, c = { i, rec, h: hitung(rec, st), nis: String(x.nis), nisn: String((rec && rec.NISN) || x.nisn || ''), nama: (rec && rec.Nama) || x.nama || '', ttl: (rec && rec.TTL) || '' }; return kol.map(f => f(c)); });
+    return { aoa: [h1, h2, nomor].concat(baris), merges, lebar: h1.length };
   }
   Act.raporTemplat = async () => {
     try { await muatXlsx(); } catch (e) { toast('Pustaka Excel gagal dimuat. Periksa koneksi.', 'bad'); return; }
     const m = semuaNis(), data = Object.keys(m).map(n => ({ nis: n, rec: m[n], nama: nmSiswa(n), nisn: (S.ix.siswa[n] || {}).NISN }))
       .sort((a, b) => String((a.rec && a.rec.Nama) || a.nama).localeCompare(String((b.rec && b.rec.Nama) || b.nama)));
     const t = templatAoa(struktur(), data), ws = XLSX.utils.aoa_to_sheet(t.aoa);
-    ws['!merges'] = t.merges; ws['!cols'] = [{ wch: 4 }, { wch: 10 }, { wch: 13 }, { wch: 30 }, { wch: 28 }].concat(Array(t.lebar - 5).fill({ wch: 5 }));
-    ws['!freeze'] = { xSplit: 4, ySplit: 2 };
-    const info = XLSX.utils.aoa_to_sheet([['PETUNJUK PENGISIAN TEMPLAT NILAI RAPOR'], [''], ['1. Jangan mengubah dua baris judul (baris 1–2) dan jangan menggeser kolom.'], ['2. Satu baris untuk satu siswa. NIS wajib sama dengan NIS di aplikasi SIGAPKL.'],
-      ['3. Isi nilai 0–100 di kolom mata pelajaran per semester. Kosongkan bila belum ada nilai.'], ['4. Kolom Semester k (I/S/A) = jumlah hari izin, sakit, tanpa keterangan.'], ['5. Jumlah dan rata-rata tidak perlu diisi: aplikasi menghitungnya sendiri.'],
-      ['6. Simpan, lalu unggah lewat menu Nilai Rapor → Impor Excel.'], [''], ['Templat ini sudah berisi data yang tersimpan saat diunduh (' + new Date().toLocaleString('id-ID') + ').']]);
+    ws['!merges'] = t.merges; ws['!cols'] = [{ wch: 4 }, { wch: 8 }, { wch: 12 }, { wch: 20 }, { wch: 28 }, { wch: 26 }].concat(Array(t.lebar - 6).fill({ wch: 5 }));
+    ws['!freeze'] = { xSplit: 5, ySplit: 3 };
+    const info = XLSX.utils.aoa_to_sheet([['PETUNJUK PENGISIAN TEMPLAT NILAI RAPOR'], [''], ['Tata letak templat ini SAMA dengan berkas "Rekapitulasi Nilai Raport" sekolah, jadi data bisa disalin-tempel langsung dari berkas sekolah.'], [''],
+      ['1. Jangan mengubah baris judul (baris 1–2) dan jangan menyisipkan atau menggeser kolom. Baris 3 (nomor kolom) boleh dibiarkan.'], ['2. Satu baris untuk satu siswa. NIS wajib sama dengan NIS di aplikasi SIGAPKL.'],
+      ['3. Isi nilai 0–100 di kolom semester (1, 2, 3, …) setiap mata pelajaran. Kosongkan bila belum ada nilai.'], ['4. Kolom Rata2, Rata-rata Kelompok, JUMLAH NILAI, dan RATA2 NILAI dihitung otomatis oleh aplikasi; boleh dikosongkan, isinya diabaikan saat impor.'],
+      ['5. Kolom Semester 1–6 (I/S/A) = jumlah hari izin, sakit, tanpa keterangan. WALI KELAS diisi nama. RANGKING diisi angka peringkat per semester.'],
+      ['6. Simpan, lalu unggah lewat menu Nilai Rapor → Impor Excel. Berkas rekap asli sekolah juga dapat diimpor langsung tanpa templat ini.'], [''], ['Templat ini sudah berisi data yang tersimpan saat diunduh (' + new Date().toLocaleString('id-ID') + ').']]);
     info['!cols'] = [{ wch: 95 }];
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Nilai Rapor'); XLSX.utils.book_append_sheet(wb, info, 'Petunjuk');
     XLSX.writeFile(wb, 'Templat Nilai Rapor SIGAPKL.xlsx');

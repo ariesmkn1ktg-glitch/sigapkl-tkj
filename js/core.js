@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const CFG = window.APP_CONFIG || {};
-  const VERSI = '2.2.1';                                   // versi aplikasi (tidak lagi dibaca dari config.js)
+  const VERSI = '2.2.2';                                   // versi aplikasi (tidak lagi dibaca dari config.js)
 
   /* ---------------- Penyimpanan lokal aman ---------------- */
   const LS = {
@@ -543,7 +543,7 @@
       const key = Sesi.peran + ':' + id, pg = Pages[key] || Pages[id];
       App.cur = id; App.param = param;
       const y = window.scrollY;
-      root.innerHTML = (lp ? layoutLanding : layout)(menu, id, pg ? pg.render(param) : '<div class="empty">Halaman belum tersedia.</div>');
+      root.innerHTML = (lp ? layoutLanding : layout)(menu, id, cekBackend() + (pg ? pg.render(param) : '<div class="empty">Halaman belum tersedia.</div>'));
       if (pg && pg.after) pg.after(param);
       isiQr(root);
       if (pertahankanScroll) window.scrollTo(0, y);
@@ -573,6 +573,17 @@
       '<button class="icon-btn" data-act="notifPanel" aria-label="Notifikasi">' + ic('notifications') + (nNotif ? '<span class="dot"></span>' : '') + '</button>' +
       '<div class="me-txt"><div class="n">' + esc(me.nama) + '</div><div class="s">' + esc(peranLabel) + '</div></div><button class="icon-btn" style="border-radius:50%;padding:0;border:0" data-act="akunSaya" aria-label="Akun saya">' + av(me.nama, Sesi.peran === 'SISWA' ? (S.ix.siswa[me.ref] || {}).FotoURL : '', '') + '</button></div></header>' +
       '<main class="content" id="content">' + (aktif === 'dashboard' ? Tema.banner() + (K.bannerKuisioner ? K.bannerKuisioner() : '') : '') + isi + '</main></div></div><nav class="bottom-nav">' + bot + '</nav>';
+  }
+  /** Peringatan Admin bila backend Apps Script tertinggal / ada berkas .gs yang belum diperbarui (v2.2.2) */
+  const mm = v => String(v || '0').split('.').slice(0, 2).map(Number);
+  function cekBackend() {
+    if (Sesi.peran !== 'ADMIN' || !S.data) return '';
+    const sv = S.data.server, b = (sv && sv.berkas) || {}, beda = Object.keys(b).filter(k => b[k] !== sv.versi);
+    const tua = !sv || mm(sv.versi)[0] < mm(VERSI)[0] || (mm(sv.versi)[0] === mm(VERSI)[0] && mm(sv.versi)[1] < mm(VERSI)[1]);
+    if (!tua && !beda.length) return '';
+    return '<div class="alert warn mb">' + ic('dns') + '<div><h4>Backend Apps Script belum sama dengan tampilan (v' + VERSI + ')</h4><p class="small">' +
+      (!sv ? 'Backend yang dipakai situs masih versi lama.' : beda.length ? 'Berkas yang belum diperbarui: <b>' + esc(beda.map(k => k + ' (' + b[k] + ')').join(', ')) + '</b>.' : 'Backend masih versi ' + esc(sv.versi) + '.') +
+      ' Tempel berkas .gs terbaru di Apps Script, lalu <b>Terapkan → Kelola deployment → ✏️ → Versi: Versi baru → Terapkan</b>. Beberapa menu tidak berfungsi sampai langkah ini selesai.</p></div></div>';
   }
   function layoutLanding(menu, aktif, isi) {
     const me = Sesi.me, peranLabel = { GURU: 'Guru Pembimbing', INSTRUKTUR: 'Instruktur Lapangan', SISWA: 'Siswa' }[Sesi.peran] || Sesi.peran;

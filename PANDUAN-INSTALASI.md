@@ -427,6 +427,13 @@ Saat penilaian tidak dibuka, menu dan tombolnya tetap tampil dengan gembok dan k
 - Pengaturan ada di **Pengaturan → Tampilan → Siswa dapat melihat nilai PKL**: *Setelah Admin menekan Tutup nilai* (bawaan) atau *Langsung saat dinilai*.
 - Perbaikan: form Pengaturan Admin kini memuat semua nilai yang tersimpan (Masa sesi login, Peta E-Jurnal, Filter kelas), sehingga tombol Simpan tidak lagi ditolak.
 
+### E13. Templat Nilai Rapor & pemeriksa versi backend (v2.2.2)
+
+- **Templat Nilai Rapor kini sama persis dengan berkas "Rekapitulasi Nilai Raport" sekolah.** Urutan kolom sama: No., NIS, NISN, NIS / NISN, NAMA SISWA, TEMPAT TANGGAL LAHIR, mapel per semester + Rata2, Rata-Rata Kelompok, JUMLAH NILAI, RATA2 NILAI, Semester 1–6 (I/S/A), WALI KELAS, RANGKING. Baris 3 berisi nomor kolom. Data dari berkas sekolah bisa langsung disalin-tempel ke templat. Berkas sekolah juga tetap bisa diimpor langsung.
+- Rata-rata kelompok kini dihitung seperti berkas sekolah: rata-rata semua nilai semester dalam kelompok itu.
+- **Pemeriksa versi backend.** Buka link `/exec` di browser untuk melihat `"berkas":{"Kode":…,"PKL":…,"Auth":…,"DocEngine":…}`. Berkas yang tertulis `LAMA` atau angka berbeda berarti belum ditempel ulang. Admin juga akan melihat peringatan kuning di aplikasi bila backend belum sama dengan tampilan.
+- **Ingat:** setelah menempel berkas `.gs`, selalu buka **Terapkan → Kelola deployment → ✏️ (deployment yang URL-nya ada di `config.js`) → Versi: Versi baru → Terapkan**. Jangan memilih *Deployment baru*.
+
 ## BAGIAN F — Pemeliharaan
 
 ### Memperbarui backend
